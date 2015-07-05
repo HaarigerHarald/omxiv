@@ -1,0 +1,20 @@
+#ifndef IMAGEDEF_H
+#define IMAGEDEF_H
+
+/* Color spaces Omx-Componts support */
+#define COLOR_SPACE_RGB24 0
+#define COLOR_SPACE_RGBA 1
+#define COLOR_SPACE_YUV420_PACKED 2
+#define COLOR_SPACE_YUV420_PACKED_SEMI 3
+#define COLOR_SPACE_RGB16 4
+
+typedef struct IMAGE{
+	char *pData;	/* Image pixel data */
+	size_t nData;	/* Data length */
+	
+	unsigned int width;
+	unsigned int height;
+	char colorSpace; 
+} IMAGE;
+
+#endif

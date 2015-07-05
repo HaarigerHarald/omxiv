@@ -21,6 +21,7 @@
 *.dylib
 
 # Executables
+*.bin
 *.exe
 *.out
 *.app
@@ -30,3 +31,11 @@
 
 # Debug files
 *.dSYM/
+
+# Test images
+*.jpeg
+*.jpg
+*.png
+
+# ilclient
+/libs
