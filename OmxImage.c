@@ -29,6 +29,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #include "OmxImage.h"
 #include "bcm_host.h"
@@ -43,6 +44,8 @@ typedef struct JPEG_DECODER {
 	OMX_HANDLETYPE handle;
 	int inPort;
 	int outPort;
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
 	volatile char emptyBDone;
 	
 	OMX_BUFFERHEADERTYPE **ppInputBufferHeader;
@@ -53,7 +56,15 @@ typedef struct JPEG_DECODER {
 
 static void emptyBufferDone(void *data, COMPONENT_T *comp){
 	JPEG_DECODER *decoder= (JPEG_DECODER*) data;
-	decoder->emptyBDone=1;
+	if(decoder->emptyBDone==0){
+		decoder->emptyBDone=1;
+	}else{
+		decoder->emptyBDone=1;
+		pthread_mutex_lock(&decoder->lock);
+		pthread_cond_signal(&decoder->cond);
+		pthread_mutex_unlock(&decoder->lock);
+	}
+	
 }
 
 static int portSettingsChanged(JPEG_DECODER *decoder, IMAGE *jpeg){
@@ -201,6 +212,9 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, size_t imageSiz
 		pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
 	}
 	
+	pthread_mutex_init(&decoder->lock, NULL);
+	pthread_cond_init(&decoder->cond, NULL);
+	
 	while(end == 0 && retVal == OMX_JPEG_OK){
 		decoder->emptyBDone=0;
 		// We've got an eos event early this usually means that we are done decoding
@@ -250,14 +264,14 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, size_t imageSiz
 					pSettingsChanged=1;
 					retVal|=portSettingsChanged(decoder, jpeg);
 		}
-		while(!decoder->emptyBDone){
-			if(pSettingsChanged == 0 && ilclient_remove_event(decoder->component,
-				OMX_EventPortSettingsChanged, decoder->outPort, 0, 0, 1 ) == 0){
-					pSettingsChanged=1;
-					retVal|=portSettingsChanged(decoder, jpeg);
-			}else{
-				usleep(100);
+		
+		if(!decoder->emptyBDone){
+			decoder->emptyBDone=2;
+			pthread_mutex_lock(&decoder->lock);
+			while (decoder->emptyBDone==2){
+				pthread_cond_wait(&decoder->cond, &decoder->lock);
 			}
+			pthread_mutex_unlock(&decoder->lock);
 		}
 		
 		if(pSettingsChanged == 0){
@@ -289,6 +303,9 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, size_t imageSiz
 				decoder->outPort, 0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, TIMEOUT_MS) != 0 ){
 		retVal|=OMX_JPEG_ERROR_NO_EOS;
 	}
+	
+	pthread_mutex_destroy(&decoder->lock);
+	pthread_cond_destroy(&decoder->cond);
 		
 	int i = 0;
 	for (i = 0; i < decoder->inputBufferHeaderCount; i++) {
@@ -356,7 +373,7 @@ int omxDecodeJpeg(ILCLIENT_T *client, char *filePath, IMAGE *jpeg){
 	}
 		
 	ret = startupDecoder(&decoder);
-   if (ret != OMX_JPEG_OK){
+	if (ret != OMX_JPEG_OK){
 		fclose(sourceFile);
 		return ret;
 	}
