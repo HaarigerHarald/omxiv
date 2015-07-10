@@ -64,7 +64,7 @@ static void cpyImage(IMAGE *from, IMAGE *to){
 
 static int imageFilter(const struct dirent *entry){
 	char* ext = strrchr(entry->d_name, '.');
-	if(ext!=NULL && (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 || 
+	if(ext!=NULL && (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 ||
 			strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
 			strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0 ||
 			strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0))
@@ -87,7 +87,7 @@ static int getImageFilesInDir(char ***list, char* path){
 				(*list)[i]= malloc(strlen(namelist[i]->d_name)+1);
 				strcpy((*list)[i], namelist[i]->d_name);
 			}else{
-				if( strchr(path, '/')-path != strlen(path)-1){
+				if(strrchr(path, '/')- path != strlen(path)-1){
 					(*list)[i]= malloc(strlen(path)+strlen(namelist[i]->d_name)+2);
 					strcpy((*list)[i],path);
 					(*list)[i][strlen(path)]='/';
@@ -159,27 +159,27 @@ static char getch(int timeout) {
 static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX_RENDER_DISP_CONF *dispConfig, char soft){
 	image->pData = NULL;
 	int ret = 0;
-	
+
 	char* ext = strrchr(filePath, '.');
-	
+
 	if(ext==NULL){
 		printf("Unsupported image\n");
 		return 0x100;
 	}
-	
+
 	if(info)
 		printf("Open file: %s\n", filePath);
-	
-	if(strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 || 
+
+	if(strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 ||
 		strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
 		strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0){
-	
+
 		JPEG_INFO jInfo;
 		ret=readJpegHeader(filePath, &jInfo);
 		if(ret != SOFT_JPEG_OK){
 			return ret;
 		}
-		
+
 		if(jInfo.mode == JPEG_MODE_PROGRESSIVE || jInfo.nColorComponents != 3 || soft){
 			if(info)
 				printf("Soft decode jpeg\n");
@@ -197,25 +197,25 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 		printf("Unsupported image\n");
 		return 0x100;
 	}
-	
+
 	if(info)
 		printf("Width: %u, Height: %u\n", image->width, image->height);
-	
-	if(resize){	
+
+	if(resize){
 		DISPMANX_DISPLAY_HANDLE_T display;
 		DISPMANX_MODEINFO_T dInfo;
 		display = vc_dispmanx_display_open(dispConfig->display);
 		vc_dispmanx_display_get_info (display, &dInfo);
-		vc_dispmanx_display_close(display); 
-		
-				
-		if(dispConfig->height > 0 && dispConfig->width > 0 
+		vc_dispmanx_display_close(display);
+
+
+		if(dispConfig->height > 0 && dispConfig->width > 0
 			&& dInfo.height > dispConfig->height && dInfo.width > dispConfig->width){
-			
+
 			IMAGE image2;
 			image2.pData = NULL;
 			image2.colorSpace = image->colorSpace;
-			
+
 			if(dispConfig->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT){
 				image2.height = dispConfig->height;
 				image2.width = dispConfig->width;
@@ -228,7 +228,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 				image2.height = dispConfig->height;
 				image2.width = dispConfig->height * iAspect;
 			}
-		
+
 			ret = omxResize(client, image, &image2);
 			if(ret != OMX_RESIZE_OK){
 				printf("resize returned %d\n", ret);
@@ -236,20 +236,20 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 				cpyImage(&image2, image);
 				if(info)
 					printf("Resized Width: %u, Height: %u\n", image->width, image->height);
-			}	
+			}
 		}else if(image->height > dInfo.height || image->width > dInfo.width || soft){
-		
+
 			IMAGE image2;
 			image2.pData = NULL;
 			image2.colorSpace = image->colorSpace;
-			
+
 			if(soft && image->height < dInfo.height && image->width < dInfo.width ){
 				image2.height = image->height;
 				image2.width = image->width;
 			}else{
 				float dAspect = (float) dInfo.width / dInfo.height;
 				float iAspect = (float) image->width / image->height;
-				
+
 				if(dAspect > iAspect){
 					image2.height = dInfo.height;
 					image2.width = dInfo.height * iAspect;
@@ -258,7 +258,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 					image2.height = dInfo.width / iAspect;
 				}
 			}
-		
+
 			ret = omxResize(client, image, &image2);
 			if(ret != OMX_RESIZE_OK){
 				printf("resize returned %d\n", ret);
@@ -269,9 +269,9 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 			}
 		}
 	}
-	
+
 	return ret;
-} 
+}
 
 // https://github.com/popcornmix/omxplayer/blob/master/omxplayer.cpp#L455
 static void blankBackground(int imageLayer, int displayNum) {
@@ -283,25 +283,25 @@ static void blankBackground(int imageLayer, int displayNum) {
 	VC_IMAGE_TYPE_T type = VC_IMAGE_RGB565;
 	uint16_t image = 0x0000; // black
 	int layer = imageLayer-1;
-	
+
 	VC_RECT_T dst_rect, src_rect;
-	
+
 	display = vc_dispmanx_display_open(displayNum);
-	
+
 	resource = vc_dispmanx_resource_create( type, 1 /*width*/, 1 /*height*/, &vc_image_ptr );
-	
+
 	vc_dispmanx_rect_set( &dst_rect, 0, 0, 1, 1);
-	
+
 	vc_dispmanx_resource_write_data( resource, type, sizeof(image), &image, &dst_rect );
-	
+
 	vc_dispmanx_rect_set( &src_rect, 0, 0, 1<<16, 1<<16);
 	vc_dispmanx_rect_set( &dst_rect, 0, 0, 0, 0);
-	
+
 	update = vc_dispmanx_update_start(0);
-	
+
 	vc_dispmanx_element_add(update, display, layer, &dst_rect, resource, &src_rect,
 									DISPMANX_PROTECTION_NONE, NULL, NULL, DISPMANX_STEREOSCOPIC_MONO );
-	
+
 	vc_dispmanx_update_submit_sync(update);
 }
 
@@ -311,11 +311,11 @@ int main(int argc, char *argv[]){
 	long timeout=0;
 	char resize=1, info=0, blank=0, soft=0, keys=1;
 	int initRotation=0;
-	
+
 	OMX_RENDER_DISP_CONF dispConfig;
 	memset(&dispConfig, 0, sizeof(OMX_RENDER_DISP_CONF));
 	dispConfig.mode=OMX_DISPLAY_MODE_LETTERBOX;
-	
+
 	int i;
 	for(i=1; i<argc; i++){
 		if(argv[i][0]=='-'){
@@ -325,7 +325,7 @@ int main(int argc, char *argv[]){
 			}else if(strcmp(argv[i], "--blank") == 0){
 				blank=1;
 			}else if(strcmp(argv[i], "--fill") == 0){
-				dispConfig.mode = OMX_DISPLAY_MODE_FILL; 
+				dispConfig.mode = OMX_DISPLAY_MODE_FILL;
 			}else if(strcmp(argv[i], "--no-aspect") == 0){
 				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
 			}else if(strcmp(argv[i], "--no-resize") == 0){
@@ -381,7 +381,7 @@ int main(int argc, char *argv[]){
 				if(strstr(argv[i], "b") != NULL)
 					blank = 1;
 				if(strstr(argv[i], "f") != NULL)
-					dispConfig.mode = OMX_DISPLAY_MODE_FILL; 
+					dispConfig.mode = OMX_DISPLAY_MODE_FILL;
 				if(strstr(argv[i], "i") != NULL)
 					info = 1;
 				if(strstr(argv[i], "a") != NULL)
@@ -409,7 +409,7 @@ int main(int argc, char *argv[]){
 			break;
 		}
 	}
-	
+
 	int imageNum;
 	char **files;
 	if(argc-i <= 0){
@@ -418,40 +418,40 @@ int main(int argc, char *argv[]){
 		imageNum=getImageFilesInDir(&files, argv[i]);
 	}else{
 		imageNum = argc-i;
-		
+
 		files=malloc(sizeof(char*) *imageNum);
 		int x;
 		for(x =0 ; i+x<argc; x++){
 			files[x]=argv[i+x];
 		}
 	}
-	
+
 	if(imageNum<1){
 		fprintf(stderr, "No images to display\n");
 		return 1;
 	}
-	
+
 	bcm_host_init();
-	
+
 	if ((client = ilclient_init()) == NULL) {
 		perror("Error init ilclient\n");
 		return 1;
 	}
-	
+
 	if (OMX_Init() != OMX_ErrorNone) {
 		perror("Error init omx\n");
 		ilclient_destroy(client);
 		return 1;
 	}
-	
+
 	OMX_RENDER render;
 	render.client=client;
 	long lShowTime;
 	long cTime;
 	IMAGE image;
 	ret=decodeImage(files[0], &image, resize,info, &dispConfig, soft);
-		
-	if(ret==0){		
+
+	if(ret==0){
 		if(blank)
 			blankBackground(dispConfig.layer, dispConfig.display);
 		lShowTime = getCurrentTimeMs();
@@ -468,14 +468,14 @@ int main(int argc, char *argv[]){
 		}
 		end=1;
 	}
-	
+
 	// Need to reset any terminal changes
 	if(keys){
 		for(i=0; i<30; i++)
 			signal(i, sig_handler);
 	}else
 		signal(SIGINT, sig_handler);
-	
+
 	i=0;
 	char c=0, paused=0;
 	while(!end){
@@ -483,7 +483,7 @@ int main(int argc, char *argv[]){
 			c = getch(1);
 			if(end)
 				break;
-		}	
+		}
 		if(timeout != 0 && imageNum > 1 && !paused){
 			cTime = getCurrentTimeMs();
 			if( (cTime-lShowTime) > timeout){
@@ -491,7 +491,6 @@ int main(int argc, char *argv[]){
 					i=0;
 				if(image.pData)
 					free(image.pData);
-				memset(&image, 0, sizeof(IMAGE));
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
 				if(ret==0){
@@ -509,7 +508,7 @@ int main(int argc, char *argv[]){
 				}
 			}
 		}
-		
+
 		if(c == 0){
 			continue;
 		}else if(c == 'q' || c =='Q'){
@@ -549,7 +548,6 @@ int main(int argc, char *argv[]){
 					i=0;
 				if(image.pData)
 					free(image.pData);
-				memset(&image, 0, sizeof(IMAGE));
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
 				if(ret==0){
@@ -570,7 +568,6 @@ int main(int argc, char *argv[]){
 					i=imageNum-1;
 				if(image.pData)
 					free(image.pData);
-				memset(&image, 0, sizeof(IMAGE));
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
 				if(ret==0){
@@ -595,27 +592,27 @@ int main(int argc, char *argv[]){
 				printf("Continue\n");
 		}
 	}
-	
+
 	if(ret == 0){
 		ret = stopImageRender(&render);
 		if(ret != 0)
 			fprintf(stderr, "render cleanup returned 0x%x\n", ret);
 	}
-			
+
 	if(image.pData){
 		free(image.pData);
 	}
-	
+
 	if(keys)
 		resetTerm();
-	
+
 	OMX_Deinit();
-	
+
 	if (client != NULL) {
 		ilclient_destroy(client);
 	}
-	
+
 	bcm_host_deinit();
-	
+
 	return ret;
 }
