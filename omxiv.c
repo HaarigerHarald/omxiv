@@ -29,12 +29,9 @@ static void resetTerm(){
 }
 
 void sig_handler(int sigNum){
-	if(!end && sigNum == SIGINT)
-		end=1;
-	else{
-		resetTerm();
-		exit(1);
-	}
+	end=1;
+	signal(SIGTERM, SIG_DFL);
+	signal(SIGINT, SIG_DFL);
 }
 
 static int isDir(char *path){
@@ -305,6 +302,18 @@ static void blankBackground(int imageLayer, int displayNum) {
 	vc_dispmanx_update_submit_sync(update);
 }
 
+// http://stackoverflow.com/a/3940758
+static int isBackgroundProc() {
+    pid_t fg = tcgetpgrp(STDIN_FILENO);
+    if(fg == -1) {
+        return 1;
+    }  else if (fg == getpgrp()) {
+        return 0;
+    } else {
+        return 1;
+    }
+}
+
 int main(int argc, char *argv[]){
 
 	int ret=1;
@@ -315,6 +324,10 @@ int main(int argc, char *argv[]){
 	OMX_RENDER_DISP_CONF dispConfig;
 	memset(&dispConfig, 0, sizeof(OMX_RENDER_DISP_CONF));
 	dispConfig.mode=OMX_DISPLAY_MODE_LETTERBOX;
+
+	if(isBackgroundProc()){
+		keys=0;
+	}
 
 	int i;
 	for(i=1; i<argc; i++){
@@ -469,12 +482,8 @@ int main(int argc, char *argv[]){
 		end=1;
 	}
 
-	// Need to reset any terminal changes
-	if(keys){
-		for(i=0; i<30; i++)
-			signal(i, sig_handler);
-	}else
-		signal(SIGINT, sig_handler);
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
 
 	i=0;
 	char c=0, paused=0;
@@ -483,6 +492,8 @@ int main(int argc, char *argv[]){
 			c = getch(1);
 			if(end)
 				break;
+		}else{
+			usleep(20000);
 		}
 		if(timeout != 0 && imageNum > 1 && !paused){
 			cTime = getCurrentTimeMs();
