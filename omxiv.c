@@ -50,8 +50,7 @@ static long getCurrentTimeMs(){
 }
 
 static void cpyImage(IMAGE *from, IMAGE *to){
-	if(to->pData)
-		free(to->pData);
+	free(to->pData);
 	to->colorSpace = from->colorSpace;
 	to->width = from->width;
 	to->height = from->height;
@@ -177,7 +176,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 			return ret;
 		}
 
-		if(jInfo.mode == JPEG_MODE_PROGRESSIVE || jInfo.nColorComponents != 3 || soft){
+		if(soft || jInfo.mode == JPEG_MODE_PROGRESSIVE || jInfo.nColorComponents != 3){
 			if(info)
 				printf("Soft decode jpeg\n");
 			ret = softDecodeJpeg(filePath, image);
@@ -228,7 +227,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 
 			ret = omxResize(client, image, &image2);
 			if(ret != OMX_RESIZE_OK){
-				printf("resize returned %d\n", ret);
+				printf("resize returned %x\n", ret);
 			}else{
 				cpyImage(&image2, image);
 				if(info)
@@ -258,7 +257,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 
 			ret = omxResize(client, image, &image2);
 			if(ret != OMX_RESIZE_OK){
-				printf("resize returned %d\n", ret);
+				printf("resize returned %x\n", ret);
 			}else{
 				cpyImage(&image2, image);
 				if(info)
@@ -500,8 +499,7 @@ int main(int argc, char *argv[]){
 			if( (cTime-lShowTime) > timeout){
 				if(imageNum <= ++i)
 					i=0;
-				if(image.pData)
-					free(image.pData);
+				free(image.pData);
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
 				if(ret==0){
@@ -557,8 +555,7 @@ int main(int argc, char *argv[]){
 			}else if(c == 0x43 && imageNum > 1){
 				if(imageNum <= ++i)
 					i=0;
-				if(image.pData)
-					free(image.pData);
+				free(image.pData);
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
 				if(ret==0){
@@ -577,8 +574,7 @@ int main(int argc, char *argv[]){
 			}else if(c == 0x44 && imageNum > 1){
 				if(0 > --i)
 					i=imageNum-1;
-				if(image.pData)
-					free(image.pData);
+				free(image.pData);
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
 				if(ret==0){
@@ -610,9 +606,7 @@ int main(int argc, char *argv[]){
 			fprintf(stderr, "render cleanup returned 0x%x\n", ret);
 	}
 
-	if(image.pData){
-		free(image.pData);
-	}
+	free(image.pData);
 
 	if(keys)
 		resetTerm();

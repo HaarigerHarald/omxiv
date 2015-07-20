@@ -389,8 +389,7 @@ int omxDecodeJpeg(ILCLIENT_T *client, char *filePath, IMAGE *jpeg){
 	list[0]=decoder.component;
 	list[1]=NULL;
 	ilclient_cleanup_components(list);
-	if(decoder.ppInputBufferHeader!=NULL)
-		free(decoder.ppInputBufferHeader);
+	free(decoder.ppInputBufferHeader);
 	return ret;
 }
 
