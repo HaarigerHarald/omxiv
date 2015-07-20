@@ -488,6 +488,7 @@ int main(int argc, char *argv[]){
 	char c=0, paused=0;
 	while(!end){
 		if(keys){
+			tcflush(0, TCIFLUSH);
 			c = getch(1);
 			if(end)
 				break;
