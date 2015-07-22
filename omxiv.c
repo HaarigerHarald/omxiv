@@ -14,9 +14,11 @@
 #include "SoftImage.h"
 #include "bcm_host.h"
 
+#define str(s) #s
+#define TO_STR(s) str(s)
+
 static ILCLIENT_T *client=NULL;
 static char end=0;
-
 
 static void resetTerm(){
 	struct termios old = {0};
@@ -110,7 +112,8 @@ void printUsage(const char *progr){
 	printf("supported images in the current folder.\n\n");
 	printf("OPTIONS:\n\n");
 	printf("    -h  --help                  Print this help\n");
-	printf("    -t                  n       Time in s between 2 files in a slide show\n");
+	printf("    -v  --version               Show version info\n");
+	printf("    -t                  n       Time in s between 2 images in a slide show\n");
 	printf("    -b  --blank                 Set background to black\n");
 	printf("        --win 'x1 y1 x2 y2'     Position of image window\n");
 	printf("        --win x1,y1,x2,y2       Position of image window\n");
@@ -201,7 +204,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 		DISPMANX_DISPLAY_HANDLE_T display;
 		DISPMANX_MODEINFO_T dInfo;
 		display = vc_dispmanx_display_open(dispConfig->display);
-		vc_dispmanx_display_get_info (display, &dInfo);
+		vc_dispmanx_display_get_info(display, &dInfo);
 		vc_dispmanx_display_close(display);
 
 
@@ -313,6 +316,11 @@ static int isBackgroundProc() {
     }
 }
 
+static void printVersion(){
+	printf("Version: %s\n", TO_STR(VERSION));
+	printf("Build date: %s\n", __TIMESTAMP__);
+}
+
 int main(int argc, char *argv[]){
 
 	int ret=1;
@@ -333,6 +341,9 @@ int main(int argc, char *argv[]){
 		if(argv[i][0]=='-'){
 			if(strcmp(argv[i], "--help") == 0){
 				printUsage(argv[0]);
+				return 0;
+			}else if(strcmp(argv[i], "--version") == 0){
+				printVersion();
 				return 0;
 			}else if(strcmp(argv[i], "--blank") == 0){
 				blank=1;
@@ -388,6 +399,10 @@ int main(int argc, char *argv[]){
 			}else{
 				if(strstr(argv[i], "h") != NULL ){
 					printUsage(argv[0]);
+					return 0;
+				}
+				if(strstr(argv[i], "v") != NULL ){
+					printVersion();
 					return 0;
 				}
 				if(strstr(argv[i], "b") != NULL)

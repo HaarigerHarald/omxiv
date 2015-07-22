@@ -2,6 +2,9 @@ OBJS=omxiv.o OmxImage.o OmxRender.o SoftImage.o
 BIN=omxiv.bin
 LDFLAGS+=-lilclient -ljpeg -lpng
 
+BUILDVERSION=$(shell git rev-parse --short=10 HEAD 2>/dev/null;test $$? -gt 0 && echo UNKNOWN)
+CFLAGS+=-DVERSION=${BUILDVERSION}
+
 include Makefile.include
 
 $(BIN): $(OBJS)
