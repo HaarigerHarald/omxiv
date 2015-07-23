@@ -201,15 +201,11 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 		printf("Width: %u, Height: %u\n", image->width, image->height);
 
 	if(resize){
-		DISPMANX_DISPLAY_HANDLE_T display;
-		DISPMANX_MODEINFO_T dInfo;
-		display = vc_dispmanx_display_open(dispConfig->display);
-		vc_dispmanx_display_get_info(display, &dInfo);
-		vc_dispmanx_display_close(display);
-
+		uint32_t sWidth, sHeight;
+		graphics_get_display_size(dispConfig->display, &sWidth, &sHeight);
 
 		if(dispConfig->height > 0 && dispConfig->width > 0
-			&& dInfo.height > dispConfig->height && dInfo.width > dispConfig->width){
+			&& sHeight > dispConfig->height && sWidth > dispConfig->width){
 
 			IMAGE image2;
 			image2.pData = NULL;
@@ -236,25 +232,25 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 				if(info)
 					printf("Resized Width: %u, Height: %u\n", image->width, image->height);
 			}
-		}else if(image->height > dInfo.height || image->width > dInfo.width || soft){
+		}else if(image->height > sHeight || image->width > sWidth || soft){
 
 			IMAGE image2;
 			image2.pData = NULL;
 			image2.colorSpace = image->colorSpace;
 
-			if(soft && image->height < dInfo.height && image->width < dInfo.width ){
+			if(soft && image->height < sHeight && image->width < sWidth ){
 				image2.height = image->height;
 				image2.width = image->width;
 			}else{
-				float dAspect = (float) dInfo.width / dInfo.height;
+				float dAspect = (float) sWidth / sHeight;
 				float iAspect = (float) image->width / image->height;
 
 				if(dAspect > iAspect){
-					image2.height = dInfo.height;
-					image2.width = dInfo.height * iAspect;
+					image2.height = sHeight;
+					image2.width = sHeight * iAspect;
 				}else{
-					image2.width = dInfo.width;
-					image2.height = dInfo.width / iAspect;
+					image2.width = sWidth;
+					image2.height = sWidth / iAspect;
 				}
 			}
 
