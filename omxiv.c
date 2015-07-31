@@ -38,7 +38,8 @@ void sig_handler(int sigNum){
 
 static int isDir(char *path){
 	struct stat statb;
-	stat(path, &statb);
+	if(stat(path, &statb)== -1)
+		return 0;
 	if(S_ISDIR(statb.st_mode))
 		return 1;
 	else
@@ -77,7 +78,7 @@ static int getImageFilesInDir(char ***list, char* path){
 	int imageNum;
 	imageNum = scandir(path, &namelist, imageFilter, alphasort);
 	if (imageNum < 0)
-		perror("scandir");
+		return imageNum;
 	else {
 		*list=malloc(sizeof(char*) *imageNum);
 		int i;
@@ -204,7 +205,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 	if(info)
 		printf("Width: %u, Height: %u\n", image->width, image->height);
 
-	if(resize){
+	if(resize && ret == 0){
 		uint32_t sWidth, sHeight;
 		graphics_get_display_size(dispConfig->display, &sWidth, &sHeight);
 
@@ -489,7 +490,7 @@ int main(int argc, char *argv[]){
 		}
 	}else{
 		if(ret == SOFT_IMAGE_ERROR_FILE_OPEN){
-			perror("Error file does not exist or is corrupted.\n");
+			fprintf(stderr, "Error file does not exist or is corrupted.\n");
 		}else if(ret!= 0x100){
 			fprintf(stderr, "decoder returned 0x%x\n", ret);
 		}
