@@ -25,3 +25,10 @@ int softDecodeJpeg(char *filePath, IMAGE *jpeg);
 #define SOFT_PNG_ERROR_CREATE_STRUCT 0x10
 
 int softDecodePng(char* filePath, IMAGE* png); 
+
+#define SOFT_BMP_OK 0x0
+#define SOFT_BMP_ERROR_MEMORY 0x1
+#define SOFT_BMP_ERROR_DECODING 0x04
+#define SOFT_BMP_ERROR_ANALYSING 0x08
+
+int softDecodeBMP(char* filePath, IMAGE* bmpImage);

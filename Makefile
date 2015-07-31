@@ -1,6 +1,7 @@
-OBJS=omxiv.o OmxImage.o OmxRender.o SoftImage.o
+OBJS=omxiv.o OmxImage.o OmxRender.o SoftImage.o ./libnsbmp/libnsbmp.o
 BIN=omxiv.bin
 LDFLAGS+=-lilclient -ljpeg -lpng
+INCLUDES+=-I./libnsbmp -I./libs/ilclient
 
 BUILDVERSION=$(shell git rev-parse --short=10 HEAD 2>/dev/null;test $$? -gt 0 && echo UNKNOWN)
 CFLAGS+=-DVERSION=${BUILDVERSION}
@@ -13,7 +14,7 @@ $(BIN): $(OBJS)
 ilclient:
 	mkdir libs
 	cp -r /opt/vc/src/hello_pi/libs/ilclient libs
-	cd libs/ilclient; make
+	make -C libs/ilclient
 	
 install:
 	cp $(BIN) /usr/bin/omxiv

@@ -65,7 +65,8 @@ static int imageFilter(const struct dirent *entry){
 	if(ext!=NULL && (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 ||
 			strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
 			strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0 ||
-			strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0))
+			strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0 ||
+			strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0))
 		return 1;
 	else
 		return 0;
@@ -73,8 +74,8 @@ static int imageFilter(const struct dirent *entry){
 
 static int getImageFilesInDir(char ***list, char* path){
 	struct dirent **namelist;
-    int imageNum;
-    imageNum = scandir(path, &namelist, imageFilter, alphasort);
+	int imageNum;
+	imageNum = scandir(path, &namelist, imageFilter, alphasort);
 	if (imageNum < 0)
 		perror("scandir");
 	else {
@@ -191,6 +192,9 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 		}
 	}else if(strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0){
 		ret = softDecodePng(filePath, image);
+		soft=1;
+	}else if(strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0){
+		ret = softDecodeBMP(filePath, image);
 		soft=1;
 	}else{
 		printf("Unsupported image\n");

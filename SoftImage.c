@@ -5,6 +5,7 @@
 #include <png.h>
 
 #include "SoftImage.h"
+#include "libnsbmp/libnsbmp.h"
 
 struct my_error_mgr {
 	struct jpeg_error_mgr pub;
@@ -262,4 +263,118 @@ int softDecodePng(char* filePath, IMAGE* png){
 	return SOFT_PNG_OK;
 }
 
+#define BYTES_PER_PIXEL 4
+
+// BMP
+
+static void *bitmap_create(int width, int height, unsigned int state){
+	return malloc(width * height * BYTES_PER_PIXEL);
+}
+
+
+static unsigned char *bitmap_get_buffer(void *bitmap){
+	return bitmap;
+}
+
+
+static size_t bitmap_get_bpp(void *bitmap){
+	return BYTES_PER_PIXEL;
+}
+
+int softDecodeBMP(char* filePath, IMAGE* bmpImage){
+	bmp_bitmap_callback_vt bitmap_callbacks = {
+		bitmap_create,
+		NULL,
+		bitmap_get_buffer,
+		bitmap_get_bpp
+	};
+	bmp_result code;
+	bmp_image bmp;
+	short ret = 0;
+
+	bmp_create(&bmp, &bitmap_callbacks);
+	
+	FILE *fp;
+	size_t size;
+	unsigned char *data;
+
+	fp = fopen(filePath, "rb");
+	if (!fp) {
+		return SOFT_IMAGE_ERROR_FILE_OPEN;
+	}
+	fseek(fp, 0L, SEEK_END);
+	size = ftell(fp);
+	fseek(fp, 0L, SEEK_SET);
+
+	data = malloc(size);
+	if (!data) {
+		fclose(fp);
+		return SOFT_BMP_ERROR_MEMORY;
+	}
+
+	if (fread(data, 1, size, fp) != size) {
+		fclose(fp);
+		return SOFT_BMP_ERROR_MEMORY;
+	}
+
+	fclose(fp);
+
+	code = bmp_analyse(&bmp, size, data);
+	if (code != BMP_OK) {
+		ret = SOFT_BMP_ERROR_ANALYSING;
+		goto cleanup;
+	}
+
+	code = bmp_decode(&bmp);
+	if (code != BMP_OK) {
+		ret = SOFT_BMP_ERROR_DECODING;
+		goto cleanup;
+	}
+	
+	char* bmpData = bmp.bitmap;
+	int bmpWidth = bmp.width;
+	
+	bmpImage->height = bmp.height;
+	bmpImage->colorSpace = COLOR_SPACE_RGBA;
+		
+	bmp_finalise(&bmp);
+	free(data);
+	
+	/* Width needs to be a multiple of 16, otherwise
+	 * resize and render component will bug. We
+	 * add some transparent pixels left and right. */
+	int wPixelAd = bmpWidth%16;
+	if(wPixelAd != 0)
+		wPixelAd=16-wPixelAd;	
+	bmpImage->width=bmpWidth+wPixelAd;
+	int wPixelAdL= wPixelAd/2;
+	int wPixelAdR = wPixelAd/2+wPixelAd%2;
+	wPixelAdL*=BYTES_PER_PIXEL;
+	wPixelAdR*=BYTES_PER_PIXEL;
+	wPixelAd*=BYTES_PER_PIXEL;
+	
+	bmpImage->nData = bmpImage->width* bmpImage->height* BYTES_PER_PIXEL;
+	bmpImage->pData = malloc(bmpImage->nData);
+	if(!bmpImage->pData){
+		free(bmpData);
+		return SOFT_BMP_ERROR_MEMORY;
+	}
+	int i;
+	for(i=0; i<bmpImage->height; i++){
+		memset(bmpImage->pData + i* bmpImage->width* BYTES_PER_PIXEL, 0, wPixelAdL);
+		memcpy(bmpImage->pData + i* bmpImage->width* BYTES_PER_PIXEL + wPixelAdL, 
+			bmpData +i* bmpWidth*BYTES_PER_PIXEL, bmpWidth*BYTES_PER_PIXEL);
+		memset(bmpImage->pData + (i+1)* bmpImage->width* BYTES_PER_PIXEL-wPixelAdR, 
+			0, wPixelAdR);
+	}
+	
+	free(bmpData);
+
+	return ret;
+	
+cleanup:
+	bmp_finalise(&bmp);
+	free(data);
+	return ret;
+}
 
