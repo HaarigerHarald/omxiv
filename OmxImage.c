@@ -181,9 +181,8 @@ static int startupDecoder(JPEG_DECODER * decoder){
 	return OMX_JPEG_OK;
 }
 
-static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, size_t imageSize, IMAGE *jpeg){
+static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	
-	size_t toread = imageSize;
 	char pSettingsChanged = 0, end = 0, eos = 0, bFilled = 0;
 	int bufferIndex = 0;
 	int retVal = OMX_JPEG_OK;
@@ -193,23 +192,16 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, size_t imageSiz
 	
 	bufferIndex++;
 	
-	if (toread > pBufHeader->nAllocLen)
-		pBufHeader->nFilledLen = pBufHeader->nAllocLen;
-	else
-		pBufHeader->nFilledLen = toread;
-	
-	toread = toread - pBufHeader->nFilledLen;
-	
-	if(fread(pBufHeader->pBuffer, 1, pBufHeader->nFilledLen, sourceImage) != 
-		pBufHeader->nFilledLen){
-		retVal|=OMX_JPEG_ERROR_READING;
-		end=1;
-	}
+	pBufHeader->nFilledLen = fread(pBufHeader->pBuffer, 1, pBufHeader->nAllocLen, sourceImage);
 	
 	pBufHeader->nOffset = 0;
 	pBufHeader->nFlags = 0;
-	if (toread <= 0) {
+	
+	if(feof(sourceImage)){
 		pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
+	}else if( pBufHeader->nFilledLen !=  pBufHeader->nAllocLen){
+		retVal|=OMX_JPEG_ERROR_READING;
+		end=1;
 	}
 	
 	pthread_mutex_init(&decoder->lock, NULL);
@@ -229,32 +221,26 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, size_t imageSiz
 			break;
 		}
 		
-		if(toread>0){
+		if(!feof(sourceImage)){
 			
 			pBufHeader = decoder->ppInputBufferHeader[bufferIndex];
 			
 			bufferIndex++;
 			if (bufferIndex >= decoder->inputBufferHeaderCount)
 				bufferIndex = 0;
-
-			if (toread > pBufHeader->nAllocLen)
-				pBufHeader->nFilledLen = pBufHeader->nAllocLen;
-			else
-				pBufHeader->nFilledLen = toread;
+		
+			pBufHeader->nFilledLen = fread(pBufHeader->pBuffer, 1, pBufHeader->nAllocLen, sourceImage);
 			
-			toread = toread - pBufHeader->nFilledLen;
-			
-			if(fread(pBufHeader->pBuffer, 1, pBufHeader->nFilledLen, sourceImage) != 
-				pBufHeader->nFilledLen){
+			pBufHeader->nOffset = 0;
+			pBufHeader->nFlags = 0;
+		
+			if(feof(sourceImage)){
+				pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
+			}else if( pBufHeader->nFilledLen !=  pBufHeader->nAllocLen){
 				retVal|=OMX_JPEG_ERROR_READING;
 				break;
 			}
 			
-			pBufHeader->nOffset = 0;
-			pBufHeader->nFlags = 0;
-			if (toread <= 0) {
-				pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
-			}
 		}else{
 			end=1;
 		}
@@ -358,13 +344,9 @@ int omxDecodeJpeg(ILCLIENT_T *client, char *filePath, IMAGE *jpeg){
 	JPEG_DECODER decoder;
 	decoder.client=client;
 	decoder.ppInputBufferHeader=NULL;
-	size_t imageSize;
 	FILE *sourceFile = fopen(filePath, "rb");
 	if(!sourceFile)
 		return OMX_JPEG_ERROR_FILE_NOT_FOUND;
-	fseek(sourceFile, 0L, SEEK_END);
-	imageSize = ftell(sourceFile);
-	fseek(sourceFile, 0L, SEEK_SET);
 	
 	int ret = prepareDecoder(&decoder);
 	if (ret != OMX_JPEG_OK){
@@ -378,7 +360,7 @@ int omxDecodeJpeg(ILCLIENT_T *client, char *filePath, IMAGE *jpeg){
 		return ret;
 	}
 		
-	ret = decodeJpeg(&decoder, sourceFile, imageSize, jpeg);
+	ret = decodeJpeg(&decoder, sourceFile, jpeg);
 	if (ret != OMX_JPEG_OK){
 		fclose(sourceFile);
 		return ret;
