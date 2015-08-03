@@ -20,12 +20,11 @@ METHODDEF(void) my_error_exit (j_common_ptr cinfo) {
 }
 
 
-int readJpegHeader(char *filePath, JPEG_INFO *jpegInfo){
+int readJpegHeader(FILE *infile, JPEG_INFO *jpegInfo){
 	struct jpeg_decompress_struct cinfo;
 	
 	struct my_error_mgr jerr;
 
-	FILE *infile = fopen(filePath, "rb");
 	if(infile == NULL){
 		return SOFT_IMAGE_ERROR_FILE_OPEN; 
 	}
@@ -34,7 +33,6 @@ int readJpegHeader(char *filePath, JPEG_INFO *jpegInfo){
 	jerr.pub.error_exit = my_error_exit;
 	if (setjmp(jerr.setjmp_buffer)) {
 		jpeg_destroy_decompress(&cinfo);
-		fclose(infile);
 		return SOFT_JPEG_ERROR_DECODING;
 	}
 
@@ -50,27 +48,20 @@ int readJpegHeader(char *filePath, JPEG_INFO *jpegInfo){
 	jpegInfo->nColorComponents = cinfo.num_components;
 	
 	jpeg_destroy_decompress(&cinfo);
-	fclose(infile);
 	
 	return SOFT_JPEG_OK;
 }
 
-int softDecodeJpeg(char *filePath, IMAGE *jpeg){
+int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	struct jpeg_decompress_struct cinfo;
 	struct my_error_mgr jerr;
-	FILE * infile;
 	JSAMPARRAY buffer;
 	int rowStride;
-	
-	if ((infile = fopen(filePath, "rb")) == NULL) {
-		return SOFT_IMAGE_ERROR_FILE_OPEN;
-	}
 	
 	cinfo.err = jpeg_std_error(&jerr.pub);
 	jerr.pub.error_exit = my_error_exit;
 	if (setjmp(jerr.setjmp_buffer)) {
 		jpeg_destroy_decompress(&cinfo);
-		fclose(infile);
 		return SOFT_JPEG_ERROR_DECODING;
 	}
 	
@@ -111,7 +102,6 @@ int softDecodeJpeg(char *filePath, IMAGE *jpeg){
 	if(jpeg->pData == NULL){
 		jpeg_finish_decompress(&cinfo);
 		jpeg_destroy_decompress(&cinfo);
-		fclose(infile);
 		return SOFT_JPEG_ERROR_MEMORY;
 	}
 	
@@ -131,8 +121,6 @@ int softDecodeJpeg(char *filePath, IMAGE *jpeg){
 	jpeg_finish_decompress(&cinfo);
 	jpeg_destroy_decompress(&cinfo);
 	
-	fclose(infile);
-	
 	if(jerr.pub.num_warnings != 0){
 		return SOFT_JPEG_ERROR_CORRUPT_DATA;
 	}
@@ -142,36 +130,31 @@ int softDecodeJpeg(char *filePath, IMAGE *jpeg){
 
 
 // Modified from https://gist.github.com/niw/5963798 
-int softDecodePng(char* filePath, IMAGE* png){
+int softDecodePng(FILE *fp, IMAGE* png){
 	png_byte header[8];
 	
 	png_structp png_ptr;
 	png_infop info_ptr;
 
-	FILE *fp = fopen(filePath, "rb");
 	if (!fp)
 		return SOFT_IMAGE_ERROR_FILE_OPEN;
 	fread(header, 1, 8, fp);
 	if (png_sig_cmp(header, 0, 8)){
-		fclose(fp);
 		return SOFT_IMAGE_ERROR_FILE_OPEN;
 	}
 	
 	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 
 	if (!png_ptr){
-		fclose(fp);
 		return SOFT_PNG_ERROR_CREATE_STRUCT;
 	}
 	
 	info_ptr = png_create_info_struct(png_ptr);
 	if (!info_ptr){
-		fclose(fp);
 		return SOFT_PNG_ERROR_CREATE_STRUCT;
 	}
 
 	if (setjmp(png_jmpbuf(png_ptr))){
-		fclose(fp);
 		return SOFT_PNG_ERROR_INIT;
 	}
 	
@@ -229,7 +212,6 @@ int softDecodePng(char* filePath, IMAGE* png){
 	
 	if (setjmp(png_jmpbuf(png_ptr))){
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		fclose(fp);
 		return SOFT_PNG_ERROR_DECODING;	
 	}
 		
@@ -239,7 +221,6 @@ int softDecodePng(char* filePath, IMAGE* png){
 	png->pData = malloc(png->nData);
 	if(!png->pData){
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		fclose(fp);
 		return SOFT_PNG_ERROR_MEMORY;
 	}
 	
@@ -259,7 +240,6 @@ int softDecodePng(char* filePath, IMAGE* png){
 		memset(png->pData +i+rBytes+wPixelAdL, 0 , wPixelAdR);
 	}
 	
-	fclose(fp);
 	return SOFT_PNG_OK;
 }
 
@@ -281,7 +261,7 @@ static size_t bitmap_get_bpp(void *bitmap){
 	return BYTES_PER_PIXEL;
 }
 
-int softDecodeBMP(char* filePath, IMAGE* bmpImage){
+int softDecodeBMP(FILE *fp, IMAGE* bmpImage){
 	bmp_bitmap_callback_vt bitmap_callbacks = {
 		bitmap_create,
 		NULL,
@@ -291,33 +271,29 @@ int softDecodeBMP(char* filePath, IMAGE* bmpImage){
 	bmp_result code;
 	bmp_image bmp;
 	short ret = 0;
-
-	bmp_create(&bmp, &bitmap_callbacks);
 	
-	FILE *fp;
-	size_t size;
-	unsigned char *data;
-
-	fp = fopen(filePath, "rb");
 	if (!fp) {
 		return SOFT_IMAGE_ERROR_FILE_OPEN;
 	}
+
+	bmp_create(&bmp, &bitmap_callbacks);
+	
+	size_t size;
+	unsigned char *data;
+
 	fseek(fp, 0L, SEEK_END);
 	size = ftell(fp);
 	fseek(fp, 0L, SEEK_SET);
 
 	data = malloc(size);
 	if (!data) {
-		fclose(fp);
 		return SOFT_BMP_ERROR_MEMORY;
 	}
 
 	if (fread(data, 1, size, fp) != size) {
-		fclose(fp);
 		return SOFT_BMP_ERROR_MEMORY;
 	}
 
-	fclose(fp);
 
 	code = bmp_analyse(&bmp, size, data);
 	if (code != BMP_OK) {

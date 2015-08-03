@@ -3,21 +3,27 @@ BIN=omxiv.bin
 LDFLAGS+=-lilclient -ljpeg -lpng
 INCLUDES+=-I./libnsbmp -I./libs/ilclient
 
+# Optional http image displaying with libcurl-dev.
+# If you want to compile without libcurl comment it out.
+OBJS+= HttpImage.o
+LDFLAGS+= -lcurl
+CFLAGS+= -DUSE_LIBCURL
+
 BUILDVERSION=$(shell git rev-parse --short=10 HEAD 2>/dev/null;test $$? -gt 0 && echo UNKNOWN)
 CFLAGS+=-DVERSION=${BUILDVERSION}
 
 include Makefile.include
 
 $(BIN): $(OBJS)
-	$(CC) -o $@ -s -Wl,--no-whole-archive -Wl,--whole-archive $(OBJS) $(LDFLAGS) -Wl,--no-whole-archive -rdynamic
+	$(CC) -o $@ -s $(OBJS) $(LDFLAGS)
 
 ilclient:
-	mkdir libs
-	cp -r /opt/vc/src/hello_pi/libs/ilclient libs
+	mkdir -p libs
+	cp -ru /opt/vc/src/hello_pi/libs/ilclient libs
 	make -C libs/ilclient
 	
 install:
-	cp $(BIN) /usr/bin/omxiv
+	install $(BIN) /usr/bin/omxiv
 	
 uninstall:
 	rm -f /usr/bin/omxiv

@@ -340,11 +340,10 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 }
 
 
-int omxDecodeJpeg(ILCLIENT_T *client, char *filePath, IMAGE *jpeg){
+int omxDecodeJpeg(ILCLIENT_T *client, FILE *sourceFile, IMAGE *jpeg){
 	JPEG_DECODER decoder;
 	decoder.client=client;
 	decoder.ppInputBufferHeader=NULL;
-	FILE *sourceFile = fopen(filePath, "rb");
 	if(!sourceFile)
 		return OMX_JPEG_ERROR_FILE_NOT_FOUND;
 	
@@ -366,7 +365,6 @@ int omxDecodeJpeg(ILCLIENT_T *client, char *filePath, IMAGE *jpeg){
 		return ret;
 	}
 	
-	fclose(sourceFile);	
 	COMPONENT_T *list[2];
 	list[0]=decoder.component;
 	list[1]=NULL;

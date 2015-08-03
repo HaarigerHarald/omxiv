@@ -15,8 +15,8 @@ typedef struct JPEG_INFO {
 	int mode;
 } JPEG_INFO;
 
-int readJpegHeader(char *filePath, JPEG_INFO *jpegInfo);
-int softDecodeJpeg(char *filePath, IMAGE *jpeg);
+int readJpegHeader(FILE *jpegFile, JPEG_INFO *jpegInfo);
+int softDecodeJpeg(FILE *jpegFile, IMAGE *jpeg);
 
 #define SOFT_PNG_OK 0x0
 #define SOFT_PNG_ERROR_MEMORY 0x1
@@ -24,11 +24,11 @@ int softDecodeJpeg(char *filePath, IMAGE *jpeg);
 #define SOFT_PNG_ERROR_INIT 0x08
 #define SOFT_PNG_ERROR_CREATE_STRUCT 0x10
 
-int softDecodePng(char* filePath, IMAGE* png); 
+int softDecodePng(FILE *pngFile, IMAGE* png); 
 
 #define SOFT_BMP_OK 0x0
 #define SOFT_BMP_ERROR_MEMORY 0x1
 #define SOFT_BMP_ERROR_DECODING 0x04
 #define SOFT_BMP_ERROR_ANALYSING 0x08
 
-int softDecodeBMP(char* filePath, IMAGE* bmpImage);
+int softDecodeBMP(FILE *bmpFile, IMAGE* bmpImage);

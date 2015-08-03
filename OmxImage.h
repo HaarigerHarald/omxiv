@@ -50,7 +50,7 @@
 /** Decodes jpeg image. Decoded images are in yuv420 color space.
  *  Note: Can't decode progressive jpegs or jpegs with more than
  *  3 color components. */
-int omxDecodeJpeg(ILCLIENT_T *client, char *filePath, IMAGE *jpeg);
+int omxDecodeJpeg(ILCLIENT_T *client, FILE *jpegFile, IMAGE *jpeg);
 
 /** Resizes inImage to outImage. Make sure to set width, 
  *  height and colorSpace of outImage before calling this. 

@@ -12,6 +12,7 @@
 #include "OmxRender.h"
 #include "OmxImage.h"
 #include "SoftImage.h"
+#include "HttpImage.h"
 #include "bcm_host.h"
 
 #define str(s) #s
@@ -160,6 +161,8 @@ static char getch(int timeout) {
 static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX_RENDER_DISP_CONF *dispConfig, char soft){
 	image->pData = NULL;
 	int ret = 0;
+	FILE *imageFile;
+	char *httpImMem = NULL;
 
 	char* ext = strrchr(filePath, '.');
 
@@ -167,40 +170,74 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 		printf("Unsupported image\n");
 		return 0x100;
 	}
-
-	if(info)
-		printf("Open file: %s\n", filePath);
+	
+#ifdef USE_LIBCURL
+	if(strncmp(filePath, "http://", 7) == 0 || strncmp(filePath, "https://", 8) == 0){
+		if(info)
+			printf("Open Url: %s\n", filePath);
+		size_t size;
+		httpImMem = getImageFromUrl(filePath, &size);
+		if(httpImMem == NULL){
+			fprintf(stderr, "Couldn't get Image from Url\n");
+			return 0x200;
+		}
+		imageFile = fmemopen((void*) httpImMem, size, "rb");
+		if(!imageFile){
+			return SOFT_IMAGE_ERROR_FILE_OPEN;
+		}
+		
+	}else
+#endif	
+	{
+		if(info)
+			printf("Open file: %s\n", filePath);
+	
+		imageFile = fopen(filePath, "rb");
+		if(!imageFile){
+			return SOFT_IMAGE_ERROR_FILE_OPEN;
+		}
+	}
+	
 
 	if(strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 ||
 		strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
 		strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0){
 
 		JPEG_INFO jInfo;
-		ret=readJpegHeader(filePath, &jInfo);
+		ret=readJpegHeader(imageFile, &jInfo);
 		if(ret != SOFT_JPEG_OK){
+			fclose(imageFile);
+			free(httpImMem);
 			return ret;
 		}
+		
+		rewind(imageFile);
 
 		if(soft || jInfo.mode == JPEG_MODE_PROGRESSIVE || jInfo.nColorComponents != 3){
 			if(info)
 				printf("Soft decode jpeg\n");
-			ret = softDecodeJpeg(filePath, image);
+			ret = softDecodeJpeg(imageFile, image);
 			soft=1;
 		}else{
 			if(info)
 				printf("Hard decode jpeg\n");
-			ret = omxDecodeJpeg(client, filePath, image);
+			ret = omxDecodeJpeg(client, imageFile, image);
 		}
 	}else if(strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0){
-		ret = softDecodePng(filePath, image);
+		ret = softDecodePng(imageFile, image);
 		soft=1;
 	}else if(strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0){
-		ret = softDecodeBMP(filePath, image);
+		ret = softDecodeBMP(imageFile, image);
 		soft=1;
 	}else{
 		printf("Unsupported image\n");
+		fclose(imageFile);
+		free(httpImMem);
 		return 0x100;
 	}
+	
+	fclose(imageFile);
+	free(httpImMem);
 
 	if(info)
 		printf("Width: %u, Height: %u\n", image->width, image->height);
@@ -320,6 +357,9 @@ static int isBackgroundProc() {
 static void printVersion(){
 	printf("Version: %s\n", TO_STR(VERSION));
 	printf("Build date: %s\n", __TIMESTAMP__);
+#ifndef USE_LIBCURL
+	printf("No libcurl support\n");  
+#endif
 }
 
 int main(int argc, char *argv[]){
