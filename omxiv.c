@@ -18,6 +18,10 @@
 #define str(s) #s
 #define TO_STR(s) str(s)
 
+static const char magNumJpeg[] = {0xff, 0xd8, 0xff};
+static const char magNumPng[] = {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1A, 0x0A};
+static const char magNumBmp[] = {0x42, 0x4d};
+
 static ILCLIENT_T *client=NULL;
 static char end=0;
 
@@ -163,13 +167,7 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 	int ret = 0;
 	FILE *imageFile;
 	char *httpImMem = NULL;
-
-	char* ext = strrchr(filePath, '.');
-
-	if(ext==NULL){
-		printf("Unsupported image\n");
-		return 0x100;
-	}
+	char magNum[8];
 	
 #ifdef USE_LIBCURL
 	if(strncmp(filePath, "http://", 7) == 0 || strncmp(filePath, "https://", 8) == 0){
@@ -182,10 +180,6 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 			return 0x200;
 		}
 		imageFile = fmemopen((void*) httpImMem, size, "rb");
-		if(!imageFile){
-			return SOFT_IMAGE_ERROR_FILE_OPEN;
-		}
-		
 	}else
 #endif	
 	{
@@ -193,15 +187,20 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 			printf("Open file: %s\n", filePath);
 	
 		imageFile = fopen(filePath, "rb");
-		if(!imageFile){
-			return SOFT_IMAGE_ERROR_FILE_OPEN;
-		}
 	}
 	
-
-	if(strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 ||
-		strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
-		strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0){
+	if(!imageFile){
+		return SOFT_IMAGE_ERROR_FILE_OPEN;
+	}
+	
+	if(fread(&magNum, 1, 8, imageFile) != 8){
+		fclose(imageFile);
+		free(httpImMem);
+		return 0x100;
+	}
+	rewind(imageFile);
+	
+	if(memcmp(magNum, magNumJpeg, sizeof(magNumJpeg)) == 0){
 
 		JPEG_INFO jInfo;
 		ret=readJpegHeader(imageFile, &jInfo);
@@ -223,10 +222,10 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 				printf("Hard decode jpeg\n");
 			ret = omxDecodeJpeg(client, imageFile, image);
 		}
-	}else if(strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0){
+	}else if(memcmp(magNum, magNumPng, sizeof(magNumPng)) == 0){
 		ret = softDecodePng(imageFile, image);
 		soft=1;
-	}else if(strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0){
+	}else if(memcmp(magNum, magNumBmp, sizeof(magNumBmp)) == 0){
 		ret = softDecodeBMP(imageFile, image);
 		soft=1;
 	}else{
