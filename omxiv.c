@@ -122,11 +122,11 @@ void printUsage(const char *progr){
 	printf("    -v  --version               Show version info\n");
 	printf("    -t                  n       Time in s between 2 images in a slide show\n");
 	printf("    -b  --blank                 Set background to black\n");
+	printf("    -y  --yuv420                Use YUV420 for rendering instead of RGBA\n\n");
 	printf("        --win 'x1 y1 x2 y2'     Position of image window\n");
 	printf("        --win x1,y1,x2,y2       Position of image window\n");
 	printf("    -f  --fill                  Use the whole screen for the image\n");
 	printf("    -a  --no-aspect             Don't keep aspect ratio when used with --win\n");
-	printf("    -r  --no-resize             Don't resize image to display size\n");
 	printf("    -o  --orientation   n       Orientation of the image (0, 90, 180, 270)\n");
 	printf("    -m  --mirror                Mirror image\n");
 	printf("    -l  --layer         n       Render layer number\n");
@@ -162,7 +162,7 @@ static char getch(int timeout) {
 	return (buf);
 }
 
-static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX_RENDER_DISP_CONF *dispConfig, char soft){
+static int decodeImage(char *filePath, IMAGE *image, char info, char color, OMX_RENDER_DISP_CONF *dispConfig, char soft){
 	image->pData = NULL;
 	int ret = 0;
 	FILE *imageFile;
@@ -216,7 +216,6 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 			if(info)
 				printf("Soft decode jpeg\n");
 			ret = softDecodeJpeg(imageFile, image);
-			soft=1;
 		}else{
 			if(info)
 				printf("Hard decode jpeg\n");
@@ -224,10 +223,8 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 		}
 	}else if(memcmp(magNum, magNumPng, sizeof(magNumPng)) == 0){
 		ret = softDecodePng(imageFile, image);
-		soft=1;
 	}else if(memcmp(magNum, magNumBmp, sizeof(magNumBmp)) == 0){
 		ret = softDecodeBMP(imageFile, image);
-		soft=1;
 	}else{
 		printf("Unsupported image\n");
 		fclose(imageFile);
@@ -241,16 +238,18 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 	if(info)
 		printf("Width: %u, Height: %u\n", image->width, image->height);
 
-	if(resize && ret == 0){
+	if(ret == 0){
 		uint32_t sWidth, sHeight;
 		graphics_get_display_size(dispConfig->display, &sWidth, &sHeight);
+		
+		IMAGE image2;
+		image2.pData = NULL;
+		image2.colorSpace = color;
+		image2.height = image->height;
+		image2.width = image->width;
 
 		if(dispConfig->height > 0 && dispConfig->width > 0
 			&& sHeight > dispConfig->height && sWidth > dispConfig->width){
-
-			IMAGE image2;
-			image2.pData = NULL;
-			image2.colorSpace = image->colorSpace;
 
 			if(dispConfig->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT){
 				image2.height = dispConfig->height;
@@ -265,44 +264,27 @@ static int decodeImage(char *filePath, IMAGE *image, char resize, char info, OMX
 				image2.width = dispConfig->height * iAspect;
 			}
 
-			ret = omxResize(client, image, &image2);
-			if(ret != OMX_RESIZE_OK){
-				printf("resize returned %x\n", ret);
+		}else if(image->height > sHeight || image->width > sWidth){
+
+			float dAspect = (float) sWidth / sHeight;
+			float iAspect = (float) image->width / image->height;
+
+			if(dAspect > iAspect){
+				image2.height = sHeight;
+				image2.width = sHeight * iAspect;
 			}else{
-				cpyImage(&image2, image);
-				if(info)
-					printf("Resized Width: %u, Height: %u\n", image->width, image->height);
+				image2.width = sWidth;
+				image2.height = sWidth / iAspect;
 			}
-		}else if(image->height > sHeight || image->width > sWidth || soft){
-
-			IMAGE image2;
-			image2.pData = NULL;
-			image2.colorSpace = image->colorSpace;
-
-			if(soft && image->height < sHeight && image->width < sWidth ){
-				image2.height = image->height;
-				image2.width = image->width;
-			}else{
-				float dAspect = (float) sWidth / sHeight;
-				float iAspect = (float) image->width / image->height;
-
-				if(dAspect > iAspect){
-					image2.height = sHeight;
-					image2.width = sHeight * iAspect;
-				}else{
-					image2.width = sWidth;
-					image2.height = sWidth / iAspect;
-				}
-			}
-
-			ret = omxResize(client, image, &image2);
-			if(ret != OMX_RESIZE_OK){
-				printf("resize returned %x\n", ret);
-			}else{
-				cpyImage(&image2, image);
-				if(info)
-					printf("Resized Width: %u, Height: %u\n", image->width, image->height);
-			}
+		}
+		
+		ret = omxResize(client, image, &image2);
+		if(ret != OMX_RESIZE_OK){
+			printf("resize returned %x\n", ret);
+		}else{
+			cpyImage(&image2, image);
+			if(info)
+				printf("Resized Width: %u, Height: %u\n", image->width, image->height);
 		}
 	}
 
@@ -365,8 +347,9 @@ int main(int argc, char *argv[]){
 
 	int ret=1;
 	long timeout=0;
-	char resize=1, info=0, blank=0, soft=0, keys=1;
+	char info=0, blank=0, soft=0, keys=1;
 	int initRotation=0;
+	char color = COLOR_SPACE_RGBA;
 
 	OMX_RENDER_DISP_CONF dispConfig;
 	memset(&dispConfig, 0, sizeof(OMX_RENDER_DISP_CONF));
@@ -391,8 +374,8 @@ int main(int argc, char *argv[]){
 				dispConfig.mode = OMX_DISPLAY_MODE_FILL;
 			}else if(strcmp(argv[i], "--no-aspect") == 0){
 				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
-			}else if(strcmp(argv[i], "--no-resize") == 0){
-				resize=0;
+			}else if(strcmp(argv[i], "--yuv420") == 0){
+				color = COLOR_SPACE_YUV420_PACKED;
 			}else if(strcmp(argv[i], "--no-keys") == 0){
 				keys=0;
 			}else if(strcmp(argv[i], "--mirror") == 0){
@@ -455,8 +438,8 @@ int main(int argc, char *argv[]){
 					dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
 				if(strstr(argv[i], "m") != NULL)
 					dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
-				if(strstr(argv[i], "r") != NULL)
-					resize=0;
+				if(strstr(argv[i], "y") != NULL)
+					color = COLOR_SPACE_YUV420_PACKED;
 				if(strstr(argv[i], "s") != NULL)
 					soft=1;
 				if(strstr(argv[i], "k") != NULL)
@@ -516,7 +499,7 @@ int main(int argc, char *argv[]){
 	long lShowTime;
 	long cTime;
 	IMAGE image;
-	ret=decodeImage(files[0], &image, resize,info, &dispConfig, soft);
+	ret=decodeImage(files[0], &image, info, color, &dispConfig, soft);
 
 	if(ret==0){
 		if(blank)
@@ -557,7 +540,7 @@ int main(int argc, char *argv[]){
 					i=0;
 				free(image.pData);
 				dispConfig.rotation= initRotation;
-				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
+				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
 				if(ret==0){
 					ret = stopImageRender(&render);
 					if(ret != 0){
@@ -613,7 +596,7 @@ int main(int argc, char *argv[]){
 					i=0;
 				free(image.pData);
 				dispConfig.rotation= initRotation;
-				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
+				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
 				if(ret==0){
 					ret = stopImageRender(&render);
 					if(ret != 0){
@@ -632,7 +615,7 @@ int main(int argc, char *argv[]){
 					i=imageNum-1;
 				free(image.pData);
 				dispConfig.rotation= initRotation;
-				ret=decodeImage(files[i], &image, resize,info, &dispConfig, soft);
+				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
 				if(ret==0){
 					ret = stopImageRender(&render);
 					if(ret != 0){
