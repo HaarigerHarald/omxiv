@@ -266,6 +266,12 @@ static int decodeImage(char *filePath, IMAGE *image, char info, char color, OMX_
 
 		}else if(image->height > sHeight || image->width > sWidth){
 
+			if(dispConfig->rotation == 90 || dispConfig->rotation == 270){
+				uint32_t rotHeight = sHeight;
+				sHeight = sWidth;
+				sWidth = rotHeight;
+			}
+			
 			float dAspect = (float) sWidth / sHeight;
 			float iAspect = (float) image->width / image->height;
 
