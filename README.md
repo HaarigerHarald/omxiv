@@ -4,11 +4,17 @@ A GPU accelerated image viewer for the Raspberry Pi.
 
 ## Building
 
-Make sure that you have the development header for libjpeg and libpng installed
-(libjpeg8-dev, libpng12-dev) then make with:
+Make sure that you have the development header for libjpeg, libpng and optional 
+libcurl installed (libjpeg8-dev, libpng12-dev, libcurl4-openssl-dev), then build 
+it on the Pi with:
 
     make ilclient
     make
+
+Or if you want to build without libcurl:
+
+    make ilclient
+    make CURL=0
 
 And install with:
 
@@ -21,7 +27,9 @@ And install with:
   
 * ##### PNGs
   - libpng
-  
+
+* ##### BMPs
+  - libnsbmp
 
 ## Credits
 ##### Thanks to:
