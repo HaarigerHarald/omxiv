@@ -3,11 +3,11 @@ BIN=omxiv.bin
 LDFLAGS+=-lilclient -ljpeg -lpng
 INCLUDES+=-I./libnsbmp -I./libs/ilclient
 
-# Optional http image displaying with libcurl-dev.
-# If you want to compile without libcurl comment it out.
+ifneq ($(CURL),0)
 OBJS+= HttpImage.o
 LDFLAGS+= -lcurl
 CFLAGS+= -DUSE_LIBCURL
+endif
 
 BUILDVERSION=$(shell git rev-parse --short=10 HEAD 2>/dev/null;test $$? -gt 0 && echo UNKNOWN)
 CFLAGS+=-DVERSION=${BUILDVERSION}
