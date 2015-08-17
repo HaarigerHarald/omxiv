@@ -512,6 +512,8 @@ int main(int argc, char *argv[]){
 			blankBackground(dispConfig.layer, dispConfig.display);
 		lShowTime = getCurrentTimeMs();
 		ret = renderImage(&render, &image, &dispConfig);
+		free(image.pData);
+		image.pData = NULL;
 		if(ret != 0){
 			fprintf(stderr, "render returned 0x%x\n", ret);
 			end=1;
@@ -544,7 +546,6 @@ int main(int argc, char *argv[]){
 			if( (cTime-lShowTime) > timeout){
 				if(imageNum <= ++i)
 					i=0;
-				free(image.pData);
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
 				if(ret==0){
@@ -554,6 +555,8 @@ int main(int argc, char *argv[]){
 						break;
 					}
 					ret = renderImage(&render, &image, &dispConfig);
+					free(image.pData);
+					image.pData = NULL;
 					if(ret != 0){
 						fprintf(stderr, "render returned 0x%x\n", ret);
 						break;
@@ -600,7 +603,6 @@ int main(int argc, char *argv[]){
 			}else if(c == 0x43 && imageNum > 1){
 				if(imageNum <= ++i)
 					i=0;
-				free(image.pData);
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
 				if(ret==0){
@@ -610,6 +612,8 @@ int main(int argc, char *argv[]){
 						break;
 					}
 					ret = renderImage(&render, &image, &dispConfig);
+					free(image.pData);
+					image.pData = NULL;
 					if(ret != 0){
 						fprintf(stderr, "render returned 0x%x\n", ret);
 						break;
@@ -619,7 +623,6 @@ int main(int argc, char *argv[]){
 			}else if(c == 0x44 && imageNum > 1){
 				if(0 > --i)
 					i=imageNum-1;
-				free(image.pData);
 				dispConfig.rotation= initRotation;
 				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
 				if(ret==0){
@@ -629,6 +632,8 @@ int main(int argc, char *argv[]){
 						break;
 					}
 					ret = renderImage(&render, &image, &dispConfig);
+					free(image.pData);
+					image.pData = NULL;
 					if(ret != 0){
 						fprintf(stderr, "render returned 0x%x\n", ret);
 						break;
