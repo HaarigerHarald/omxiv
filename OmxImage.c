@@ -254,9 +254,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		if(!decoder->emptyBDone){
 			decoder->emptyBDone=2;
 			pthread_mutex_lock(&decoder->lock);
-			while (decoder->emptyBDone==2){
-				pthread_cond_wait(&decoder->cond, &decoder->lock);
-			}
+			pthread_cond_wait(&decoder->cond, &decoder->lock);
 			pthread_mutex_unlock(&decoder->lock);
 		}
 		
@@ -348,22 +346,16 @@ int omxDecodeJpeg(ILCLIENT_T *client, FILE *sourceFile, IMAGE *jpeg){
 		return OMX_JPEG_ERROR_FILE_NOT_FOUND;
 	
 	int ret = prepareDecoder(&decoder);
-	if (ret != OMX_JPEG_OK){
-		fclose(sourceFile);
+	if (ret != OMX_JPEG_OK)
 		return ret;
-	}
 		
 	ret = startupDecoder(&decoder);
-	if (ret != OMX_JPEG_OK){
-		fclose(sourceFile);
+	if (ret != OMX_JPEG_OK)
 		return ret;
-	}
 		
 	ret = decodeJpeg(&decoder, sourceFile, jpeg);
-	if (ret != OMX_JPEG_OK){
-		fclose(sourceFile);
+	if (ret != OMX_JPEG_OK)
 		return ret;
-	}
 	
 	COMPONENT_T *list[2];
 	list[0]=decoder.component;
