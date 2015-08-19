@@ -1,7 +1,7 @@
 #ifndef IMAGEDEF_H
 #define IMAGEDEF_H
 
-/* Color spaces Omx-Componts support */
+/* Color spaces OMX-Components support */
 #define COLOR_SPACE_RGB24 0
 #define COLOR_SPACE_RGBA 1
 #define COLOR_SPACE_YUV420_PACKED 2
@@ -10,7 +10,7 @@
 
 typedef struct IMAGE{
 	char *pData;	/* Image pixel data */
-	size_t nData;	/* Data length */
+	size_t nData;	/* Alloc data length (=stride*height) */
 	
 	unsigned int width;
 	unsigned int height;

@@ -286,7 +286,7 @@ static int decodeImage(char *filePath, IMAGE *image, char info, char color, OMX_
 		
 		ret = omxResize(client, image, &image2);
 		if(ret != OMX_RESIZE_OK){
-			printf("resize returned %x\n", ret);
+			printf("resize returned 0x%x\n", ret);
 		}else{
 			cpyImage(&image2, image);
 			if(info)

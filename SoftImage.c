@@ -75,20 +75,15 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	
 	rowStride = cinfo.output_width * cinfo.output_components;
 	
-	/* Width needs to be a multiple of 16, otherwise
-	 * resize and render component will bug. We
-	 * add some transparent pixels left and right. */
+	jpeg->width = cinfo.output_width;
+	
+	/* Stride memory needs to be a multiple of 16, 
+	 * otherwise resize and render component will bug. */
 	int wPixelAd = cinfo.output_width%16;
-	if(wPixelAd == 0){
-		jpeg->width = cinfo.output_width;
-	}else{
+	if(wPixelAd != 0){
 		wPixelAd=16-wPixelAd;
-		jpeg->width = cinfo.output_width+wPixelAd;
 	}
-	int wPixelAdL= wPixelAd/2;
-	int wPixelAdR = wPixelAd/2+wPixelAd%2;
-	wPixelAdL*=4;
-	wPixelAdR*=4;
+	int stride = jpeg->width+wPixelAd;
 	
 	jpeg->height = cinfo.output_height;
 	jpeg->colorSpace = COLOR_SPACE_RGBA;
@@ -97,7 +92,7 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 		((j_common_ptr) &cinfo, JPOOL_IMAGE, rowStride, 1);
 	size_t i, x,y;
 	
-	jpeg->nData = 4 * jpeg->width * cinfo.output_height;
+	jpeg->nData = 4 * stride * cinfo.output_height;
 	jpeg->pData = malloc(jpeg->nData);
 	if(jpeg->pData == NULL){
 		jpeg_finish_decompress(&cinfo);
@@ -108,14 +103,12 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	
 	size_t rBytes= cinfo.output_width*4;
 	// Copy and convert from RGB to RGBA
-	for(i=0; cinfo.output_scanline < cinfo.output_height; i+=(jpeg->width*4)) {
+	for(i=0; cinfo.output_scanline < cinfo.output_height; i+=(stride*4)) {
 		jpeg_read_scanlines(&cinfo, buffer, 1);
-		memset(jpeg->pData, 0 , wPixelAdL);
 		for(x = 0,y=0; x < rBytes; x+=4, y+=3){
-			jpeg->pData[i+x+wPixelAdL+3]=255;
-			memcpy(jpeg->pData+i+x+wPixelAdL, buffer[0]+y, 3);
+			jpeg->pData[i+x+3]=255;
+			memcpy(jpeg->pData+i+x, buffer[0]+y, 3);
 		}
-		memset(jpeg->pData+i+rBytes+ wPixelAdL, 0, wPixelAdR);
 	}
 	
 	jpeg_finish_decompress(&cinfo);
@@ -193,18 +186,13 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	
 	png->width = png_get_image_width(png_ptr, info_ptr);
 	
-	/* Width needs to be a multiple of 16, otherwise
-	 * resize and render component will bug. We
-	 * add some transparent pixels left and right. */
+	/* Stride memory needs to be a multiple of 16, 
+	 * otherwise resize and render component will bug. */
 	int wPixelAd = png->width%16;
-	if(wPixelAd != 0){
+	if(wPixelAd != 0)
 		wPixelAd=16-wPixelAd;
-		png->width+=wPixelAd;
-	}
-	int wPixelAdL= wPixelAd/2;
-	int wPixelAdR = wPixelAd/2+wPixelAd%2;
-	wPixelAdL*=4;
-	wPixelAdR*=4;
+	
+	int stride = png->width+wPixelAd;
 	wPixelAd*=4;
 	
 	png->height = png_get_image_height(png_ptr, info_ptr);
@@ -217,7 +205,7 @@ int softDecodePng(FILE *fp, IMAGE* png){
 		
 	int rBytes= png_get_rowbytes(png_ptr,info_ptr);
 		
-	png->nData = 4*png->height*png->width;
+	png->nData = 4*png->height*stride;
 	png->pData = malloc(png->nData);
 	if(!png->pData){
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -227,18 +215,13 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	png_bytep row_pointers[png->height];
 	size_t i;
 	for (i=0; i < png->height; i++) {
-		row_pointers[i] = (png_bytep) png->pData + i*(rBytes+ wPixelAd) +wPixelAdL;
+		row_pointers[i] = (png_bytep) png->pData + i*(rBytes+ wPixelAd);
 	}
 	
 	png_read_image(png_ptr, row_pointers);
 	
 	png_read_end(png_ptr, NULL);
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-	
-	for (i=0; i < png->nData; i+=rBytes+ wPixelAd) {
-		memset(png->pData + i, 0, wPixelAdL);
-		memset(png->pData +i+rBytes+wPixelAdL, 0 , wPixelAdR);
-	}
 	
 	return SOFT_PNG_OK;
 }
@@ -311,25 +294,20 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage){
 	int bmpWidth = bmp.width;
 	
 	bmpImage->height = bmp.height;
+	bmpImage->width=bmpWidth;
 	bmpImage->colorSpace = COLOR_SPACE_RGBA;
 		
 	bmp_finalise(&bmp);
 	free(data);
 	
-	/* Width needs to be a multiple of 16, otherwise
-	 * resize and render component will bug. We
-	 * add some transparent pixels left and right. */
+	/* Stride memory needs to be a multiple of 16, 
+	 * otherwise resize and render component will bug. */
 	int wPixelAd = bmpWidth%16;
 	if(wPixelAd != 0)
 		wPixelAd=16-wPixelAd;	
-	bmpImage->width=bmpWidth+wPixelAd;
-	int wPixelAdL= wPixelAd/2;
-	int wPixelAdR = wPixelAd/2+wPixelAd%2;
-	wPixelAdL*=BYTES_PER_PIXEL;
-	wPixelAdR*=BYTES_PER_PIXEL;
-	wPixelAd*=BYTES_PER_PIXEL;
+	int stride=bmpWidth+wPixelAd;
 	
-	bmpImage->nData = bmpImage->width* bmpImage->height* BYTES_PER_PIXEL;
+	bmpImage->nData = stride* bmpImage->height* BYTES_PER_PIXEL;
 	bmpImage->pData = malloc(bmpImage->nData);
 	if(!bmpImage->pData){
 		free(bmpData);
@@ -337,11 +315,8 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage){
 	}
 	int i;
 	for(i=0; i<bmpImage->height; i++){
-		memset(bmpImage->pData + i* bmpImage->width* BYTES_PER_PIXEL, 0, wPixelAdL);
-		memcpy(bmpImage->pData + i* bmpImage->width* BYTES_PER_PIXEL + wPixelAdL, 
+		memcpy(bmpImage->pData + i* stride* BYTES_PER_PIXEL, 
 			bmpData +i* bmpWidth*BYTES_PER_PIXEL, bmpWidth*BYTES_PER_PIXEL);
-		memset(bmpImage->pData + (i+1)* bmpImage->width* BYTES_PER_PIXEL-wPixelAdR, 
-			0, wPixelAdR);
 	}
 	
 	free(bmpData);
