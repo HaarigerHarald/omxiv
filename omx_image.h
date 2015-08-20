@@ -25,51 +25,36 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "ImageDef.h"
 #include "ilclient.h"
+#include "image_def.h"
 
-#define OMX_RENDER_OK 0x0
-#define OMX_RENDER_ERROR_CREATE_COMP 0x01
-#define OMX_RENDER_ERROR_EXECUTING 0x02
-#define OMX_RENDER_ERROR_PARAMETER 0x04
-#define OMX_RENDER_ERROR_PORTS 0x08
-#define OMX_RENDER_ERROR_UNKNOWN 0x10
-#define OMX_RENDER_ERROR_MEMORY 0x20
-#define OMX_RENDER_ERROR_DISP_CONF 0x40
+#define OMX_JPEG_OK 0x0
+#define OMX_JPEG_ERROR_MEMORY  0x1
+#define OMX_JPEG_ERROR_CREATING_COMP 0x2
+#define OMX_JPEG_ERROR_UNKNOWN 0x4
+#define OMX_JPEG_ERROR_PORTS 0x8
+#define OMX_JPEG_ERROR_EXECUTING 0x10
+#define OMX_JPEG_ERROR_NO_EOS 0x20
+#define OMX_JPEG_ERROR_FILE_NOT_FOUND 0x40
+#define OMX_JPEG_ERROR_READING 0x80
 
-#define OMX_DISP_CONFIG_FLAG_NO_ASPECT 0x1
-#define OMX_DISP_CONFIG_FLAG_MIRROR 0x2
+#define OMX_RESIZE_OK 0x0
+#define OMX_RESIZE_ERROR_MEMORY  0x1
+#define OMX_RESIZE_ERROR_CREATING_COMP 0x2
+#define OMX_RESIZE_ERROR_UNKNOWN 0x4
+#define OMX_RESIZE_ERROR_PORTS 0x8
+#define OMX_RESIZE_ERROR_NO_EOS 0x10
+#define OMX_RESIZE_ERROR_PARAMETER 0x20
 
-typedef struct OMX_RENDER_DISP_CONF{	
-	int xOffset; 
-	unsigned int width; 
-	int yOffset;
-	unsigned int height;
-	int rotation;
-	int layer;
-	int display;
-	int alpha;
-	int mode;
-	int configFlags;
-	
-} OMX_RENDER_DISP_CONF;
 
-typedef struct OMX_RENDER{
-	ILCLIENT_T *client;
-	COMPONENT_T *component;
-	OMX_HANDLETYPE handle;
-	int inPort;
-	
-	OMX_BUFFERHEADERTYPE *pInputBufferHeader;
-	
-} OMX_RENDER;
+/** Decodes jpeg image. Decoded images are in yuv420 color space.
+ *  Note: Can't decode progressive jpegs or jpegs with more than
+ *  3 color components. */
+int omxDecodeJpeg(ILCLIENT_T *client, FILE *jpegFile, IMAGE *jpeg);
 
-/** Change display configuration of the image render component. */
-int setDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf);
-
-/** Renders an image on an omx-video_render component. */
-int renderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConfig);
-
-/** Stops rendering of current image and cleans up. */
-int stopImageRender(OMX_RENDER *render);
+/** Resizes inImage to outImage. Make sure to set width, 
+ *  height and colorSpace of outImage before calling this. 
+ *  Note: The resize component can't handle rgb24 color space 
+ *  use rgba instead. */
+int omxResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage);
 

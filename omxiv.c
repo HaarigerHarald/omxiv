@@ -9,10 +9,9 @@
 #include <signal.h>
 #include <dirent.h>
 
-#include "OmxRender.h"
-#include "OmxImage.h"
-#include "SoftImage.h"
-#include "HttpImage.h"
+#include "omx_render.h"
+#include "omx_image.h"
+#include "soft_image.h"
 #include "bcm_host.h"
 
 #define str(s) #s

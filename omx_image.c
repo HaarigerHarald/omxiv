@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-#include "OmxImage.h"
+#include "omx_image.h"
 #include "bcm_host.h"
 
 #define TIMEOUT_MS 1500
@@ -162,7 +162,7 @@ static int startupDecoder(JPEG_DECODER * decoder){
 		if (OMX_AllocateBuffer(decoder->handle,
 					&decoder->ppInputBufferHeader[i],
 					decoder->inPort,
-					(void *) i, portdef.nBufferSize) != OMX_ErrorNone) {
+					NULL, portdef.nBufferSize) != OMX_ErrorNone) {
 			return OMX_JPEG_ERROR_MEMORY;
 		}
 	}

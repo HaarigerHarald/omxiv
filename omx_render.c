@@ -27,7 +27,7 @@
 
 #include <stdlib.h>
 
-#include "OmxRender.h"
+#include "omx_render.h"
 #include "bcm_host.h"
 
 #define TIMEOUT_MS 2000

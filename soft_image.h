@@ -1,4 +1,4 @@
-#include "ImageDef.h"
+#include "image_def.h"
 
 #define SOFT_IMAGE_ERROR_FILE_OPEN 0x02
 
@@ -32,3 +32,7 @@ int softDecodePng(FILE *pngFile, IMAGE* png);
 #define SOFT_BMP_ERROR_ANALYSING 0x08
 
 int softDecodeBMP(FILE *bmpFile, IMAGE* bmpImage);
+
+/* Get Image from Url */
+char* getImageFromUrl(const char *url, size_t *size);
+
