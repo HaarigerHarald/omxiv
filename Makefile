@@ -1,7 +1,7 @@
-OBJS=omxiv.o omx_image.o omx_render.o soft_image.o ./libnsbmp/libnsbmp.o
+OBJS=omxiv.o omx_image.o omx_render.o soft_image.o ./libnsbmp/libnsbmp.o ./libnsgif/libnsgif.o
 BIN=omxiv.bin
 LDFLAGS+=-lilclient -ljpeg -lpng
-INCLUDES+=-I./libnsbmp -I./libs/ilclient
+INCLUDES+=-I./libnsbmp -I./libnsgif -I./libs/ilclient
 
 ifneq ($(CURL),0)
 LDFLAGS+= -lcurl

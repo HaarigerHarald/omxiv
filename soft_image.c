@@ -1,3 +1,30 @@
+/* Copyright (c) 2015, Benjamin Huber
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of the copyright holder nor the
+ *      names of its contributors may be used to endorse or promote products
+ *      derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +34,9 @@
 
 #include "soft_image.h"
 #include "libnsbmp/libnsbmp.h"
+#include "libnsgif/libnsgif.h"
+
+#define ALIGN16(x) (((x+0xf)>>4)<<4)
 
 struct my_error_mgr {
 	struct jpeg_error_mgr pub;
@@ -80,11 +110,7 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	
 	/* Stride memory needs to be a multiple of 16, 
 	 * otherwise resize and render component will bug. */
-	int wPixelAd = cinfo.output_width%16;
-	if(wPixelAd != 0){
-		wPixelAd=16-wPixelAd;
-	}
-	int stride = jpeg->width+wPixelAd;
+	unsigned int stride = ALIGN16(jpeg->width)*4;
 	
 	jpeg->height = cinfo.output_height;
 	jpeg->colorSpace = COLOR_SPACE_RGBA;
@@ -93,7 +119,7 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 		((j_common_ptr) &cinfo, JPOOL_IMAGE, rowStride, 1);
 	size_t i, x,y;
 	
-	jpeg->nData = 4 * stride * cinfo.output_height;
+	jpeg->nData = stride * cinfo.output_height;
 	jpeg->pData = malloc(jpeg->nData);
 	if(jpeg->pData == NULL){
 		jpeg_finish_decompress(&cinfo);
@@ -103,8 +129,9 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	
 	
 	size_t rBytes= cinfo.output_width*4;
+	
 	// Copy and convert from RGB to RGBA
-	for(i=0; cinfo.output_scanline < cinfo.output_height; i+=(stride*4)) {
+	for(i=0; cinfo.output_scanline < cinfo.output_height; i+=stride) {
 		jpeg_read_scanlines(&cinfo, buffer, 1);
 		for(x = 0,y=0; x < rBytes; x+=4, y+=3){
 			jpeg->pData[i+x+3]=255;
@@ -122,8 +149,11 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	return SOFT_JPEG_OK;
 }
 
-
-// Modified from https://gist.github.com/niw/5963798 
+/**
+ * Modified from https://gist.github.com/niw/5963798
+ * Copyright (C) Guillaume Cottenceau, Yoshimasa Niwa
+ * Distributed under the MIT License.
+**/
 int softDecodePng(FILE *fp, IMAGE* png){
 	png_byte header[8];
 	
@@ -188,15 +218,12 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	png->width = png_get_image_width(png_ptr, info_ptr);
 	
 	/* Stride memory needs to be a multiple of 16, 
-	 * otherwise resize and render component will bug. */
-	int wPixelAd = png->width%16;
-	if(wPixelAd != 0)
-		wPixelAd=16-wPixelAd;
+	 * otherwise resize and render component will bug. */	
+	unsigned int stride = ALIGN16(png->width)*4;
 	
-	int stride = png->width+wPixelAd;
-	wPixelAd*=4;
 	
 	png->height = png_get_image_height(png_ptr, info_ptr);
+	
 	png->colorSpace = COLOR_SPACE_RGBA;
 	
 	if (setjmp(png_jmpbuf(png_ptr))){
@@ -204,9 +231,7 @@ int softDecodePng(FILE *fp, IMAGE* png){
 		return SOFT_PNG_ERROR_DECODING;	
 	}
 		
-	int rBytes= png_get_rowbytes(png_ptr,info_ptr);
-		
-	png->nData = 4*png->height*stride;
+	png->nData = ALIGN16(png->height)*stride;
 	png->pData = malloc(png->nData);
 	if(!png->pData){
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
@@ -216,7 +241,7 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	png_bytep row_pointers[png->height];
 	size_t i;
 	for (i=0; i < png->height; i++) {
-		row_pointers[i] = (png_bytep) png->pData + i*(rBytes+ wPixelAd);
+		row_pointers[i] = (png_bytep) png->pData + i*(stride);
 	}
 	
 	png_read_image(png_ptr, row_pointers);
@@ -227,59 +252,58 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	return SOFT_PNG_OK;
 }
 
-#define BYTES_PER_PIXEL 4
-
 // BMP
 
-static void *bitmap_create(int width, int height, unsigned int state){
-	return malloc(width * height * BYTES_PER_PIXEL);
+static void *bmp_init(int width, int height, unsigned int state){
+	return malloc(width * height * 4);
 }
 
 
-static unsigned char *bitmap_get_buffer(void *bitmap){
+static unsigned char *bmp_get_buffer(void *bitmap){
 	return bitmap;
 }
 
 
-static size_t bitmap_get_bpp(void *bitmap){
-	return BYTES_PER_PIXEL;
+static size_t bmp_get_bpp(void *bitmap){
+	return 4;
 }
 
-int softDecodeBMP(FILE *fp, IMAGE* bmpImage){
+int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size){
 	bmp_bitmap_callback_vt bitmap_callbacks = {
-		bitmap_create,
+		bmp_init,
 		NULL,
-		bitmap_get_buffer,
-		bitmap_get_bpp
+		bmp_get_buffer,
+		bmp_get_bpp
 	};
 	bmp_result code;
 	bmp_image bmp;
 	short ret = 0;
 	
-	if (!fp) {
+	if(!fp){
 		return SOFT_IMAGE_ERROR_FILE_OPEN;
 	}
-
-	bmp_create(&bmp, &bitmap_callbacks);
 	
-	size_t size;
-	unsigned char *data;
+	if(data == NULL || *data == NULL){
+		
+		fseek(fp, 0L, SEEK_END);
+		size = ftell(fp);
+		fseek(fp, 0L, SEEK_SET);
 
-	fseek(fp, 0L, SEEK_END);
-	size = ftell(fp);
-	fseek(fp, 0L, SEEK_SET);
+		*data = malloc(size);
+		if (!*data) {
+			return SOFT_BMP_ERROR_MEMORY;
+		}
 
-	data = malloc(size);
-	if (!data) {
-		return SOFT_BMP_ERROR_MEMORY;
+		if (fread(*data, 1, size, fp) != size) {
+			free(*data);
+			*data = NULL;
+			return SOFT_BMP_ERROR_MEMORY;
+		}
 	}
+	
+	bmp_create(&bmp, &bitmap_callbacks);
 
-	if (fread(data, 1, size, fp) != size) {
-		return SOFT_BMP_ERROR_MEMORY;
-	}
-
-
-	code = bmp_analyse(&bmp, size, data);
+	code = bmp_analyse(&bmp, size, *data);
 	if (code != BMP_OK) {
 		ret = SOFT_BMP_ERROR_ANALYSING;
 		goto cleanup;
@@ -299,16 +323,14 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage){
 	bmpImage->colorSpace = COLOR_SPACE_RGBA;
 		
 	bmp_finalise(&bmp);
-	free(data);
+	free(*data);
+	*data = NULL;
 	
 	/* Stride memory needs to be a multiple of 16, 
 	 * otherwise resize and render component will bug. */
-	int wPixelAd = bmpWidth%16;
-	if(wPixelAd != 0)
-		wPixelAd=16-wPixelAd;	
-	int stride=bmpWidth+wPixelAd;
+	unsigned int stride= ALIGN16(bmpWidth) *4;
 	
-	bmpImage->nData = stride* bmpImage->height* BYTES_PER_PIXEL;
+	bmpImage->nData = stride* ALIGN16(bmpImage->height);
 	bmpImage->pData = malloc(bmpImage->nData);
 	if(!bmpImage->pData){
 		free(bmpData);
@@ -316,8 +338,8 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage){
 	}
 	int i;
 	for(i=0; i<bmpImage->height; i++){
-		memcpy(bmpImage->pData + i* stride* BYTES_PER_PIXEL, 
-			bmpData +i* bmpWidth*BYTES_PER_PIXEL, bmpWidth*BYTES_PER_PIXEL);
+		memcpy(bmpImage->pData + i* stride, 
+			bmpData +i* bmpWidth*4, bmpWidth*4);
 	}
 	
 	free(bmpData);
@@ -326,7 +348,169 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage){
 	
 cleanup:
 	bmp_finalise(&bmp);
-	free(data);
+	free(*data);
+	*data = NULL;
+	return ret;
+}
+
+// GIF
+
+static void *gif_init(int width, int height){
+	return malloc(width * height * 4);
+}
+
+static unsigned char *gif_get_buffer(void *bitmap){
+	return bitmap;
+}
+
+static void gif_destroy(void *bitmap){
+	free(bitmap);
+}
+
+void destroyAnimImage(ANIM_IMAGE *animIm){
+	gif_animation *gif = (gif_animation*) animIm->pExtraData;
+	gif_finalise(gif);
+	
+	if(animIm->curFrame){
+		destroyImage(animIm->curFrame);
+	}
+	free(animIm->imData);
+	free(animIm->pExtraData);
+	memset(animIm, 0, sizeof(ANIM_IMAGE));
+}
+
+static int decodeNextGifFrame(ANIM_IMAGE *gifImage){
+	
+	if(!gifImage->imData || !gifImage->curFrame->pData){
+		return SOFT_GIF_ERROR_MEMORY;
+	}
+	int ret;
+	
+	gif_animation *gif = (gif_animation*) gifImage->pExtraData;
+	gif_result code;
+	
+	gifImage->frameNum++;
+	gifImage->frameNum%=gifImage->frameCount;
+	
+	unsigned int stride = ALIGN16(gif->width)*4;
+	gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
+	
+	code = gif_decode_frame(gif, gifImage->frameNum);
+	if (code != GIF_OK){
+		ret = SOFT_GIF_ERROR_DECODING;
+		goto cleanup;
+	}
+	
+	unsigned int n;
+	for(n=0; n<gif->height; n++){
+		memcpy(gifImage->curFrame->pData + n* stride, 
+			gif->frame_image +n* gif->width*4, 
+			gif->width*4);
+	}
+	
+	return SOFT_GIF_OK;
+	
+cleanup:
+	destroyAnimImage(gifImage);
+	return ret;
+	
+}
+
+int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** data, size_t size){
+	gif_bitmap_callback_vt bitmap_callbacks = {
+		gif_init,
+		gif_destroy,
+		gif_get_buffer,
+		NULL,
+		NULL,
+		NULL
+	};
+	
+	int ret;
+	gif_animation* gif = malloc(sizeof(gif_animation));
+	if(!gif)
+		return SOFT_GIF_ERROR_MEMORY;
+	gif_result code;
+	gifImage->pExtraData = gif;
+	gifImage->curFrame = frame;
+	gifImage->frameCount = 0;
+	
+	if (!fp) {
+		return SOFT_IMAGE_ERROR_FILE_OPEN;
+	}
+	
+	if(data == NULL || *data == NULL){
+		
+		fseek(fp, 0L, SEEK_END);
+		size = ftell(fp);
+		fseek(fp, 0L, SEEK_SET);
+
+		*data = malloc(size);
+		if (!*data) {
+			return SOFT_GIF_ERROR_MEMORY;
+		}
+
+		if (fread(*data, 1, size, fp) != size) {
+			free(*data);
+			*data = NULL;
+			return SOFT_GIF_ERROR_MEMORY;
+		}
+	}
+	
+	gifImage->size = size;
+	gifImage->imData = *data;
+	
+	gif_create(gif, &bitmap_callbacks);
+	gifImage->decodeNextFrame = decodeNextGifFrame;
+	gifImage->finaliseDecoding = destroyAnimImage;
+
+	do {
+		code = gif_initialise(gif, size, *data);
+		if (code != GIF_OK && code != GIF_WORKING){
+			ret = SOFT_GIF_ERROR_ANALYSING;
+			goto cleanup;
+		}
+	} while (code != GIF_OK);
+	
+	gifImage->frameCount = gif->frame_count;
+	gifImage->loopCount = gif->loop_count;
+	
+	unsigned int stride = ALIGN16(gif->width)*4;
+	
+	size_t nData = stride* ALIGN16(gif->height);
+	
+	gifImage->curFrame->pData = malloc(nData);
+	if(!gifImage->curFrame->pData){
+		ret = SOFT_GIF_ERROR_MEMORY;
+		goto cleanup;
+	}
+	
+	gifImage->curFrame->nData = nData;
+	gifImage->curFrame->width = gif->width;
+	gifImage->curFrame->height = gif->height;
+	gifImage->curFrame->colorSpace = COLOR_SPACE_RGBA;
+	gifImage->frameNum = 0;
+	gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
+
+	code = gif_decode_frame(gif, gifImage->frameNum);
+	if (code != GIF_OK){
+		ret = SOFT_GIF_ERROR_DECODING;
+		goto cleanup;
+	}
+	
+	unsigned int n;
+	for(n=0; n<gif->height; n++){
+		memcpy(gifImage->curFrame->pData + n* stride, 
+			gif->frame_image +n* gif->width*4, 
+			gif->width*4);
+	}
+	
+	*data = NULL;
+	return SOFT_GIF_OK;
+	
+cleanup:
+	destroyAnimImage(gifImage);
+	*data = NULL;
 	return ret;
 }
 
@@ -341,7 +525,7 @@ cleanup:
 #include <curl/curl.h>
 
 struct MemoryStruct {
-	char *memory;
+	unsigned char *memory;
 	size_t size;
 };
 
@@ -361,7 +545,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 	return realsize;
 }
 
-char* getImageFromUrl(const char *url, size_t *size){
+unsigned char* getImageFromUrl(const char *url, size_t *size){
 	CURL *curl_handle;
 	CURLcode res;
 

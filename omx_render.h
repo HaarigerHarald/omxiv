@@ -27,6 +27,7 @@
 
 #include "image_def.h"
 #include "ilclient.h"
+#include <pthread.h>
 
 #define OMX_RENDER_OK 0x0
 #define OMX_RENDER_ERROR_CREATE_COMP 0x01
@@ -42,9 +43,9 @@
 
 typedef struct OMX_RENDER_DISP_CONF{	
 	int xOffset; 
-	unsigned int width; 
+	int width; 
 	int yOffset;
-	unsigned int height;
+	int height;
 	int rotation;
 	int layer;
 	int display;
@@ -62,6 +63,10 @@ typedef struct OMX_RENDER{
 	
 	OMX_BUFFERHEADERTYPE *pInputBufferHeader;
 	
+	char renderAnimation;
+	volatile char stop;
+	pthread_t animRenderThread;
+	
 } OMX_RENDER;
 
 /** Change display configuration of the image render component. */
@@ -72,4 +77,8 @@ int renderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConf
 
 /** Stops rendering of current image and cleans up. */
 int stopImageRender(OMX_RENDER *render);
+
+int renderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *dispConfig);
+
+void stopAnimation(OMX_RENDER *render);
 

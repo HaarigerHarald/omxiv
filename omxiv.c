@@ -20,6 +20,7 @@
 static const char magNumJpeg[] = {0xff, 0xd8, 0xff};
 static const char magNumPng[] = {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1A, 0x0A};
 static const char magNumBmp[] = {0x42, 0x4d};
+static const char magNumGif[] = {0x47, 0x49, 0x46, 0x38};
 
 static ILCLIENT_T *client=NULL;
 static char end=0;
@@ -50,14 +51,15 @@ static int isDir(char *path){
 		return 0;
 }
 
-static long getCurrentTimeMs(){
+static unsigned long getCurrentTimeMs(){
 	struct timeval  tv;
 	gettimeofday(&tv, NULL);
-	return (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
+	return (tv.tv_sec) * 1000UL + (tv.tv_usec) / 1000UL ;
 }
 
 static void cpyImage(IMAGE *from, IMAGE *to){
-	free(to->pData);
+	if(to->pData != from->pData)
+		free(to->pData);
 	to->colorSpace = from->colorSpace;
 	to->width = from->width;
 	to->height = from->height;
@@ -71,7 +73,8 @@ static int imageFilter(const struct dirent *entry){
 			strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
 			strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0 ||
 			strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0 ||
-			strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0))
+			strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0 ||
+			strcmp(ext, ".gif") == 0 || strcmp(ext, ".GIF") == 0 ))
 		return 1;
 	else
 		return 0;
@@ -161,18 +164,18 @@ static char getch(int timeout) {
 	return (buf);
 }
 
-static int decodeImage(char *filePath, IMAGE *image, char info, char color, OMX_RENDER_DISP_CONF *dispConfig, char soft){
-	image->pData = NULL;
+static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info, 
+			char color, OMX_RENDER_DISP_CONF *dispConfig, char soft){
 	int ret = 0;
 	FILE *imageFile;
-	char *httpImMem = NULL;
+	unsigned char *httpImMem = NULL;
+	size_t size = 0;
 	char magNum[8];
 	
 #ifdef USE_LIBCURL
 	if(strncmp(filePath, "http://", 7) == 0 || strncmp(filePath, "https://", 8) == 0){
 		if(info)
 			printf("Open Url: %s\n", filePath);
-		size_t size;
 		httpImMem = getImageFromUrl(filePath, &size);
 		if(httpImMem == NULL){
 			fprintf(stderr, "Couldn't get Image from Url\n");
@@ -223,7 +226,9 @@ static int decodeImage(char *filePath, IMAGE *image, char info, char color, OMX_
 	}else if(memcmp(magNum, magNumPng, sizeof(magNumPng)) == 0){
 		ret = softDecodePng(imageFile, image);
 	}else if(memcmp(magNum, magNumBmp, sizeof(magNumBmp)) == 0){
-		ret = softDecodeBMP(imageFile, image);
+		ret = softDecodeBMP(imageFile, image, &httpImMem, size);
+	}else if(memcmp(magNum, magNumGif, sizeof(magNumGif)) == 0){
+		ret = softDecodeGif(imageFile, anim, image, &httpImMem, size);
 	}else{
 		printf("Unsupported image\n");
 		fclose(imageFile);
@@ -237,53 +242,14 @@ static int decodeImage(char *filePath, IMAGE *image, char info, char color, OMX_
 	if(info)
 		printf("Width: %u, Height: %u\n", image->width, image->height);
 
-	if(ret == 0){
-		uint32_t sWidth, sHeight;
-		graphics_get_display_size(dispConfig->display, &sWidth, &sHeight);
-		
+	if(ret == 0 && anim->frameCount < 2){		
 		IMAGE image2;
-		image2.pData = NULL;
 		image2.colorSpace = color;
-		image2.height = image->height;
-		image2.width = image->width;
-
-		if(dispConfig->height > 0 && dispConfig->width > 0
-			&& sHeight > dispConfig->height && sWidth > dispConfig->width){
-
-			if(dispConfig->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT){
-				image2.height = dispConfig->height;
-				image2.width = dispConfig->width;
-			}else if(dispConfig->width < dispConfig->height) {
-				float iAspect = (float) image->width / image->height;
-				image2.width = dispConfig->width;
-				image2.height = dispConfig->width / iAspect;
-			}else{
-				float iAspect = (float) image->width / image->height;
-				image2.height = dispConfig->height;
-				image2.width = dispConfig->height * iAspect;
-			}
-
-		}else if(image->height > sHeight || image->width > sWidth){
-
-			if(dispConfig->rotation == 90 || dispConfig->rotation == 270){
-				uint32_t rotHeight = sHeight;
-				sHeight = sWidth;
-				sWidth = rotHeight;
-			}
+		image2.height = dispConfig->height;
+		image2.width = dispConfig->width;
 			
-			float dAspect = (float) sWidth / sHeight;
-			float iAspect = (float) image->width / image->height;
-
-			if(dAspect > iAspect){
-				image2.height = sHeight;
-				image2.width = sHeight * iAspect;
-			}else{
-				image2.width = sWidth;
-				image2.height = sWidth / iAspect;
-			}
-		}
-		
-		ret = omxResize(client, image, &image2);
+		ret = omxAutoResize(client, image, &image2, dispConfig->display, dispConfig->rotation, 
+				dispConfig->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT);
 		if(ret != OMX_RESIZE_OK){
 			printf("resize returned 0x%x\n", ret);
 		}else{
@@ -296,7 +262,8 @@ static int decodeImage(char *filePath, IMAGE *image, char info, char color, OMX_
 	return ret;
 }
 
-// https://github.com/popcornmix/omxplayer/blob/master/omxplayer.cpp#L455
+/* From: https://github.com/popcornmix/omxplayer/blob/master/omxplayer.cpp#L455
+ * Licensed under the GPLv2 */
 static void blankBackground(int imageLayer, int displayNum) {
 	// we create a 1x1 black pixel image that is added to display just behind video
 	DISPMANX_DISPLAY_HANDLE_T display;
@@ -501,18 +468,23 @@ int main(int argc, char *argv[]){
 
 	OMX_RENDER render;
 	render.client=client;
-	long lShowTime;
-	long cTime;
-	IMAGE image;
-	ret=decodeImage(files[0], &image, info, color, &dispConfig, soft);
+	unsigned long lShowTime = 0;
+	unsigned long cTime;
+	IMAGE image = INIT_IMAGE;
+	ANIM_IMAGE anim = INIT_ANIM_IMAGE;
+	
+	ret=decodeImage(files[0], &image, &anim, info, color, &dispConfig, soft);
 
 	if(ret==0){
 		if(blank)
 			blankBackground(dispConfig.layer, dispConfig.display);
 		lShowTime = getCurrentTimeMs();
-		ret = renderImage(&render, &image, &dispConfig);
-		free(image.pData);
-		image.pData = NULL;
+		if(anim.frameCount < 2){
+			ret = renderImage(&render, &image, &dispConfig);
+			destroyImage(&image);
+		}else{
+			ret = renderAnimation(&render, &anim, &dispConfig);
+		}
 		if(ret != 0){
 			fprintf(stderr, "render returned 0x%x\n", ret);
 			end=1;
@@ -546,16 +518,20 @@ int main(int argc, char *argv[]){
 				if(imageNum <= ++i)
 					i=0;
 				dispConfig.rotation= initRotation;
-				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
+				stopAnimation(&render);
+				ret=decodeImage(files[i], &image, &anim, info, color, &dispConfig, soft);
 				if(ret==0){
 					ret = stopImageRender(&render);
 					if(ret != 0){
 						fprintf(stderr, "render cleanup returned 0x%x\n", ret);
 						break;
 					}
-					ret = renderImage(&render, &image, &dispConfig);
-					free(image.pData);
-					image.pData = NULL;
+					if(anim.frameCount < 2){
+						ret = renderImage(&render, &image, &dispConfig);
+						destroyImage(&image);
+					}else{
+						ret = renderAnimation(&render, &anim, &dispConfig);
+					}
 					if(ret != 0){
 						fprintf(stderr, "render returned 0x%x\n", ret);
 						break;
@@ -603,16 +579,20 @@ int main(int argc, char *argv[]){
 				if(imageNum <= ++i)
 					i=0;
 				dispConfig.rotation= initRotation;
-				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
+				stopAnimation(&render);
+				ret=decodeImage(files[i], &image, &anim, info, color, &dispConfig, soft);
 				if(ret==0){
 					ret = stopImageRender(&render);
 					if(ret != 0){
 						fprintf(stderr, "render cleanup returned 0x%x\n", ret);
 						break;
 					}
-					ret = renderImage(&render, &image, &dispConfig);
-					free(image.pData);
-					image.pData = NULL;
+					if(anim.frameCount < 2){
+						ret = renderImage(&render, &image, &dispConfig);
+						destroyImage(&image);
+					}else{
+						ret = renderAnimation(&render, &anim, &dispConfig);
+					}
 					if(ret != 0){
 						fprintf(stderr, "render returned 0x%x\n", ret);
 						break;
@@ -623,16 +603,20 @@ int main(int argc, char *argv[]){
 				if(0 > --i)
 					i=imageNum-1;
 				dispConfig.rotation= initRotation;
-				ret=decodeImage(files[i], &image, info, color, &dispConfig, soft);
+				stopAnimation(&render);
+				ret=decodeImage(files[i], &image, &anim, info, color, &dispConfig, soft);
 				if(ret==0){
 					ret = stopImageRender(&render);
 					if(ret != 0){
 						fprintf(stderr, "render cleanup returned 0x%x\n", ret);
 						break;
 					}
-					ret = renderImage(&render, &image, &dispConfig);
-					free(image.pData);
-					image.pData = NULL;
+					if(anim.frameCount < 2){
+						ret = renderImage(&render, &image, &dispConfig);
+						destroyImage(&image);
+					}else{
+						ret = renderAnimation(&render, &anim, &dispConfig);
+					}
 					if(ret != 0){
 						fprintf(stderr, "render returned 0x%x\n", ret);
 						break;

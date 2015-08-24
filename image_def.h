@@ -1,5 +1,37 @@
+/* Copyright (c) 2015, Benjamin Huber
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *    * Redistributions of source code must retain the above copyright
+ *      notice, this list of conditions and the following disclaimer.
+ *    * Redistributions in binary form must reproduce the above copyright
+ *      notice, this list of conditions and the following disclaimer in the
+ *      documentation and/or other materials provided with the distribution.
+ *    * Neither the name of the copyright holder nor the
+ *      names of its contributors may be used to endorse or promote products
+ *      derived from this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #ifndef IMAGEDEF_H
 #define IMAGEDEF_H
+
+#define INIT_IMAGE { 0, 0, 0, 0, 0}
+#define INIT_ANIM_IMAGE { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+
+#define destroyImage(im) free((im)->pData); (im)->pData = NULL
 
 /* Color spaces OMX-Components support */
 #define COLOR_SPACE_RGB24 0
@@ -14,7 +46,24 @@ typedef struct IMAGE{
 	
 	unsigned int width;
 	unsigned int height;
-	char colorSpace; 
+	unsigned char colorSpace; 
 } IMAGE;
+
+typedef struct ANIM_IMAGE{
+	IMAGE *curFrame;
+	unsigned frameNum;
+	
+	unsigned char* imData;
+	size_t size;
+	
+	void* pExtraData;
+	int (*decodeNextFrame)(struct ANIM_IMAGE *);
+	void (*finaliseDecoding)(struct ANIM_IMAGE *);
+	
+	unsigned int frameCount;
+	unsigned int frameDelayCs;
+	int loopCount;
+
+} ANIM_IMAGE;
 
 #endif

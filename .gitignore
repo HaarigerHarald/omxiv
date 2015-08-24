@@ -37,6 +37,7 @@
 *.jpg
 *.png
 *.bmp
+*.gif
 
 # ilclient
 /libs

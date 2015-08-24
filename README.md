@@ -30,6 +30,9 @@ And install with:
 
 * ##### BMPs
   - libnsbmp
+  
+* ##### GIFs
+  - libnsgif
 
 ## Credits
 ##### Thanks to:

@@ -24,8 +24,9 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+ 
 #include <stdlib.h>
+#include <string.h>
 
 #include "omx_render.h"
 #include "bcm_host.h"
@@ -106,7 +107,7 @@ static int setUpRender(OMX_RENDER *render, IMAGE *image){
 			
 	if(ret != OMX_ErrorNone){
 		return OMX_RENDER_ERROR_MEMORY;
-	}	
+	}
 	
 	return OMX_RENDER_OK;
 }
@@ -115,7 +116,8 @@ static int doRender(OMX_RENDER *render, IMAGE *image){
 	int retVal= OMX_RENDER_OK;
 	OMX_BUFFERHEADERTYPE *pBufHeader = render->pInputBufferHeader;
 	pBufHeader->nFilledLen=image->nData;
-	pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
+	if(!render->renderAnimation)
+		pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;	
 	
 	int ret = OMX_EmptyThisBuffer(render->handle, pBufHeader);
 	if (ret != OMX_ErrorNone) {
@@ -196,6 +198,7 @@ int setDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf){
 
 
 int renderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConfig){
+	render->renderAnimation = 0;
 	int ret = initRender(render);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
@@ -215,13 +218,90 @@ int renderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConf
 	return OMX_RENDER_OK;
 }
 
+struct ANIM_RENDER_PARAMS{
+	OMX_RENDER *render;
+	ANIM_IMAGE *anim;
+};
+
+static void* doRenderAnimation(void* params){
+	OMX_RENDER *render = ((struct ANIM_RENDER_PARAMS *)params)->render;
+	ANIM_IMAGE *anim = ((struct ANIM_RENDER_PARAMS *)params)->anim;
+	int ret=0;
+	unsigned int i;
+	if(anim->loopCount <= 0){
+		while(ret == 0 && render->stop == 0){
+			for(i=anim->frameCount; i--;){
+				doRender(render, anim->curFrame);
+				usleep(anim->frameDelayCs*10000L);
+				if(render->stop != 0)
+					goto end;
+				ret=anim->decodeNextFrame(anim);
+				if(ret != 0 || render->stop != 0)
+					goto end;	
+			}
+		}
+	}else{
+		while(anim->loopCount-- && ret == 0 && render->stop == 0){
+			for(i=anim->frameCount; i--;){
+				doRender(render, anim->curFrame);
+				usleep(anim->frameDelayCs*10000L);
+				if(render->stop != 0)
+					goto end;
+				ret=anim->decodeNextFrame(anim);
+				if(ret != 0 || render->stop != 0)
+					goto end;	
+			}
+		}
+	}
+	
+end:
+	free(params);
+	anim->finaliseDecoding(anim);
+	return NULL;
+}
+
+int renderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *dispConfig){
+	render->renderAnimation = 1;
+	int ret = initRender(render);
+	if(ret!= OMX_RENDER_OK){
+		return ret;
+	}
+	ret = setDisplayConfig(render, dispConfig);
+	if(ret!= OMX_RENDER_OK){
+		return ret;
+	}
+	ret = setUpRender(render, anim->curFrame);
+	if(ret!= OMX_RENDER_OK){
+		return ret;
+	}
+	
+	struct ANIM_RENDER_PARAMS* animRenderParams = malloc(sizeof(struct ANIM_RENDER_PARAMS));
+	animRenderParams->anim = anim;
+	animRenderParams->render =  render;
+	render->stop = 0;
+	
+	pthread_create(&render->animRenderThread, NULL, doRenderAnimation, animRenderParams);
+	
+	return OMX_RENDER_OK;
+}
+
+void stopAnimation(OMX_RENDER *render){
+	if(render->renderAnimation){
+		render->stop = 1;
+		pthread_join(render->animRenderThread, NULL);
+		render->renderAnimation = 0;
+	}
+}
+
 int stopImageRender(OMX_RENDER *render){
 	int retVal=OMX_RENDER_OK;
 	
-	OMX_SendCommand(render->handle, OMX_CommandFlush, render->inPort, NULL);
+	stopAnimation(render);
 	
-	ilclient_wait_for_event(render->component,OMX_EventCmdComplete, OMX_CommandFlush, 
-			0, render->inPort, 0, ILCLIENT_PORT_FLUSH, TIMEOUT_MS);
+	// OMX_SendCommand(render->handle, OMX_CommandFlush, render->inPort, NULL);
+	
+	// ilclient_wait_for_event(render->component,OMX_EventCmdComplete, OMX_CommandFlush, 
+			// 0, render->inPort, 0, ILCLIENT_PORT_FLUSH, TIMEOUT_MS);
 			
 	OMX_SendCommand(render->handle, OMX_CommandPortDisable, render->inPort, NULL);
 		

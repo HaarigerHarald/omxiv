@@ -612,3 +612,42 @@ int omxResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage){
 	ilclient_cleanup_components(list);
 	return ret;
 }
+
+int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, int display, 
+			int rotation, char noAspect){
+	
+	outImage->pData = NULL;
+	
+	uint32_t sWidth, sHeight;
+
+	if(outImage->height > 0 && outImage->width > 0){
+		
+		if(noAspect){
+			return omxResize(client, inImage, outImage);
+		}
+		
+		sWidth = outImage->width;
+		sHeight= outImage->height;
+	}else{
+		graphics_get_display_size(display, &sWidth, &sHeight);
+	}
+
+	if(rotation == 90 || rotation == 270){
+		uint32_t rotHeight = sHeight;
+		sHeight = sWidth;
+		sWidth = rotHeight;
+	}
+	
+	float dAspect = (float) sWidth / sHeight;
+	float iAspect = (float) inImage->width / inImage->height;
+
+	if(dAspect > iAspect){
+		outImage->height = sHeight;
+		outImage->width = sHeight * iAspect;
+	}else{
+		outImage->width = sWidth;
+		outImage->height = sWidth / iAspect;
+	}
+	
+	return omxResize(client, inImage, outImage);
+}
