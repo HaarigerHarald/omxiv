@@ -51,7 +51,7 @@ typedef struct IMAGE{
 
 typedef struct ANIM_IMAGE{
 	IMAGE *curFrame;
-	unsigned frameNum;
+	unsigned int frameNum;
 	
 	unsigned char* imData;
 	size_t size;
