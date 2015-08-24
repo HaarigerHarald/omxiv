@@ -31,7 +31,7 @@
 #define INIT_IMAGE { 0, 0, 0, 0, 0}
 #define INIT_ANIM_IMAGE { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
-#define destroyImage(im) free((im)->pData); (im)->pData = NULL
+#define destroyImage(im) {free((im)->pData); (im)->pData = NULL;}
 
 /* Color spaces OMX-Components support */
 #define COLOR_SPACE_RGB24 0

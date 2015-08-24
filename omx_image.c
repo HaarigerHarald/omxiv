@@ -258,16 +258,12 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 			pthread_mutex_unlock(&decoder->lock);
 		}
 		
-		if(pSettingsChanged == 0){
-			if(ilclient_remove_event(decoder->component, OMX_EventPortSettingsChanged, 
-					decoder->outPort, 0, 0, 1 ) == 0){
-					pSettingsChanged=1;
-					retVal|=portSettingsChanged(decoder, jpeg);
-			}else if(ilclient_wait_for_event(decoder->component,OMX_EventPortSettingsChanged,decoder->outPort, 
-					0, 0, 1, ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, 10) == 0){	 
-				pSettingsChanged=1;
-				retVal|=portSettingsChanged(decoder, jpeg);
-			}
+		if(pSettingsChanged == 0 && ilclient_wait_for_event(decoder->component,
+				OMX_EventPortSettingsChanged,decoder->outPort, 0, 0, 1, 
+				ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, 10) == 0){	 
+			
+			pSettingsChanged=1;
+			retVal|=portSettingsChanged(decoder, jpeg);
 		}
 			
 			
@@ -613,8 +609,8 @@ int omxResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage){
 	return ret;
 }
 
-int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, int display, 
-			int rotation, char noAspect){
+int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, const int display, 
+			const int rotation, const char noAspect){
 	
 	outImage->pData = NULL;
 	

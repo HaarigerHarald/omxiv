@@ -59,7 +59,7 @@ static unsigned long getCurrentTimeMs(){
 
 static void cpyImage(IMAGE *from, IMAGE *to){
 	if(to->pData != from->pData)
-		free(to->pData);
+		destroyImage(to);
 	to->colorSpace = from->colorSpace;
 	to->width = from->width;
 	to->height = from->height;
@@ -309,7 +309,7 @@ static int isBackgroundProc() {
 
 static void printVersion(){
 	printf("Version: %s\n", TO_STR(VERSION));
-	printf("Build date: %s\n", __TIMESTAMP__);
+	printf("Build date: %s\n", __DATE__);
 #ifndef USE_LIBCURL
 	printf("No libcurl support\n");  
 #endif

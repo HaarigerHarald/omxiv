@@ -61,7 +61,7 @@ int omxResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage);
 /** Resizes inImage to outImage. Make sure to set width, 
  *  height and colorSpace of outImage before calling this. 
  *  Takes screen resolution and rotation into account. */
-int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, int display, 
-			int rotation, char noAspect);
+int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, const int display, 
+			const int rotation, const char noAspect);
 
 
