@@ -35,6 +35,7 @@
 #include "bcm_host.h"
 
 #define TIMEOUT_MS 1500
+#define DECODER_BUFFER_NUM 2
 
 // Jpeg decoder
 
@@ -48,8 +49,7 @@ typedef struct JPEG_DECODER {
 	pthread_cond_t cond;
 	volatile char emptyBDone;
 	
-	OMX_BUFFERHEADERTYPE **ppInputBufferHeader;
-	size_t inputBufferHeaderCount;
+	OMX_BUFFERHEADERTYPE *ppInputBufferHeader[DECODER_BUFFER_NUM];
 	OMX_BUFFERHEADERTYPE *pOutputBufferHeader;
 	
 } JPEG_DECODER;
@@ -151,16 +151,16 @@ static int startupDecoder(JPEG_DECODER * decoder){
 	portdef.nPortIndex = decoder->inPort;
 	OMX_GetParameter(decoder->handle,OMX_IndexParamPortDefinition, &portdef);
 	
-	OMX_SendCommand(decoder->handle, OMX_CommandPortEnable, decoder->inPort, NULL);
-			
-	decoder->inputBufferHeaderCount = portdef.nBufferCountActual;
+	portdef.nBufferCountActual = DECODER_BUFFER_NUM;
 	
-	decoder->ppInputBufferHeader = (OMX_BUFFERHEADERTYPE **) malloc(sizeof(void)*decoder->inputBufferHeaderCount);
+	OMX_SetParameter(decoder->handle,OMX_IndexParamPortDefinition, &portdef);
+	
+	OMX_SendCommand(decoder->handle, OMX_CommandPortEnable, decoder->inPort, NULL);
 	
 	int i;
-	for (i = 0; i < decoder->inputBufferHeaderCount; i++) {
+	for (i = 0; i < DECODER_BUFFER_NUM; i++) {
 		if (OMX_AllocateBuffer(decoder->handle,
-					&decoder->ppInputBufferHeader[i],
+					&(decoder->ppInputBufferHeader[i]),
 					decoder->inPort,
 					NULL, portdef.nBufferSize) != OMX_ErrorNone) {
 			return OMX_JPEG_ERROR_MEMORY;
@@ -190,7 +190,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	OMX_BUFFERHEADERTYPE *pBufHeader = decoder->ppInputBufferHeader[bufferIndex];
 	ilclient_set_empty_buffer_done_callback(decoder->client, emptyBufferDone, decoder);
 	
-	bufferIndex++;
+	bufferIndex^=1;
 	
 	pBufHeader->nFilledLen = fread(pBufHeader->pBuffer, 1, pBufHeader->nAllocLen, sourceImage);
 	
@@ -225,9 +225,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 			
 			pBufHeader = decoder->ppInputBufferHeader[bufferIndex];
 			
-			bufferIndex++;
-			if (bufferIndex >= decoder->inputBufferHeaderCount)
-				bufferIndex = 0;
+			bufferIndex^=1;
 		
 			pBufHeader->nFilledLen = fread(pBufHeader->pBuffer, 1, pBufHeader->nAllocLen, sourceImage);
 			
@@ -288,7 +286,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	pthread_cond_destroy(&decoder->cond);
 		
 	int i = 0;
-	for (i = 0; i < decoder->inputBufferHeaderCount; i++) {
+	for (i = 0; i < DECODER_BUFFER_NUM; i++) {
 		int ret = OMX_FreeBuffer(decoder->handle,decoder->inPort, decoder->ppInputBufferHeader[i]);
 		if(ret!= OMX_ErrorNone){
 			retVal|=OMX_JPEG_ERROR_MEMORY;
@@ -337,7 +335,6 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 int omxDecodeJpeg(ILCLIENT_T *client, FILE *sourceFile, IMAGE *jpeg){
 	JPEG_DECODER decoder;
 	decoder.client=client;
-	decoder.ppInputBufferHeader=NULL;
 	if(!sourceFile)
 		return OMX_JPEG_ERROR_FILE_NOT_FOUND;
 	
@@ -357,7 +354,6 @@ int omxDecodeJpeg(ILCLIENT_T *client, FILE *sourceFile, IMAGE *jpeg){
 	list[0]=decoder.component;
 	list[1]=NULL;
 	ilclient_cleanup_components(list);
-	free(decoder.ppInputBufferHeader);
 	return ret;
 }
 
