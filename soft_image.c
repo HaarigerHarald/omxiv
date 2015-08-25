@@ -255,7 +255,7 @@ int softDecodePng(FILE *fp, IMAGE* png){
 // BMP
 
 static void *bmp_init(int width, int height, unsigned int state){
-	return malloc(width * height * 4);
+	return malloc(ALIGN16(width) * ALIGN16(height) * 4);
 }
 
 
@@ -331,18 +331,13 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size){
 	unsigned int stride= ALIGN16(bmpWidth) *4;
 	
 	bmpImage->nData = stride* ALIGN16(bmpImage->height);
-	bmpImage->pData = malloc(bmpImage->nData);
-	if(!bmpImage->pData){
-		free(bmpData);
-		return SOFT_BMP_ERROR_MEMORY;
-	}
+
+	bmpImage->pData = bmpData;
 	int i;
-	for(i=0; i<bmpImage->height; i++){
-		memcpy(bmpImage->pData + i* stride, 
+	for(i=bmpImage->height-1;i>0 ; i--){
+		memmove(bmpImage->pData + i* stride, 
 			bmpData +i* bmpWidth*4, bmpWidth*4);
 	}
-	
-	free(bmpData);
 
 	return ret;
 	
