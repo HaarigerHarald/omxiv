@@ -66,6 +66,8 @@ typedef struct OMX_RENDER{
 	char renderAnimation;
 	volatile char stop;
 	pthread_t animRenderThread;
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
 	
 } OMX_RENDER;
 

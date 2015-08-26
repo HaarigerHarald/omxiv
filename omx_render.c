@@ -27,6 +27,7 @@
  
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "omx_render.h"
 #include "bcm_host.h"
@@ -228,28 +229,53 @@ static void* doRenderAnimation(void* params){
 	ANIM_IMAGE *anim = ((struct ANIM_RENDER_PARAMS *)params)->anim;
 	int ret=0;
 	unsigned int i;
+	struct timespec wait;
 	if(anim->loopCount <= 0){
 		while(ret == 0 && render->stop == 0){
 			for(i=anim->frameCount; i--;){
 				doRender(render, anim->curFrame);
-				usleep(anim->frameDelayCs*10000L);
-				if(render->stop != 0)
-					goto end;
+				clock_gettime(CLOCK_REALTIME, &wait);
+				
+				unsigned int sec = anim->frameDelayCs/100;
+				anim->frameDelayCs -= sec*100;
+				wait.tv_nsec += anim->frameDelayCs*10000000L;
+				wait.tv_sec += sec + wait.tv_nsec/1000000000L;
+				wait.tv_nsec%=1000000000L;
+				
 				ret=anim->decodeNextFrame(anim);
 				if(ret != 0 || render->stop != 0)
-					goto end;	
+					goto end;
+						
+				pthread_mutex_lock(&render->lock);
+				pthread_cond_timedwait(&render->cond, &render->lock, &wait);
+				pthread_mutex_unlock(&render->lock);
+				
+				if(render->stop != 0)
+					goto end;
 			}
 		}
 	}else{
 		while(anim->loopCount-- && ret == 0 && render->stop == 0){
 			for(i=anim->frameCount; i--;){
 				doRender(render, anim->curFrame);
-				usleep(anim->frameDelayCs*10000L);
-				if(render->stop != 0)
-					goto end;
+				clock_gettime(CLOCK_REALTIME, &wait);
+				
+				unsigned int sec = anim->frameDelayCs/100;
+				anim->frameDelayCs -= sec*100;
+				wait.tv_nsec += anim->frameDelayCs*10000000L;
+				wait.tv_sec += sec + wait.tv_nsec/1000000000L;
+				wait.tv_nsec%=1000000000L;
+				
 				ret=anim->decodeNextFrame(anim);
 				if(ret != 0 || render->stop != 0)
-					goto end;	
+					goto end;
+				
+				pthread_mutex_lock(&render->lock);
+				pthread_cond_timedwait(&render->cond, &render->lock, &wait);
+				pthread_mutex_unlock(&render->lock);
+				
+				if(render->stop != 0)
+					goto end;
 			}
 		}
 	}
@@ -257,6 +283,8 @@ static void* doRenderAnimation(void* params){
 end:
 	free(params);
 	anim->finaliseDecoding(anim);
+	pthread_mutex_destroy(&render->lock);
+	pthread_cond_destroy(&render->cond);
 	return NULL;
 }
 
@@ -280,6 +308,9 @@ int renderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *
 	animRenderParams->render =  render;
 	render->stop = 0;
 	
+	pthread_mutex_init(&render->lock, NULL);
+	pthread_cond_init(&render->cond, NULL);
+	
 	pthread_create(&render->animRenderThread, NULL, doRenderAnimation, animRenderParams);
 	
 	return OMX_RENDER_OK;
@@ -288,6 +319,9 @@ int renderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *
 void stopAnimation(OMX_RENDER *render){
 	if(render->renderAnimation){
 		render->stop = 1;
+		pthread_mutex_lock(&render->lock);
+		pthread_cond_signal(&render->cond);
+		pthread_mutex_unlock(&render->lock);
 		pthread_join(render->animRenderThread, NULL);
 		render->renderAnimation = 0;
 	}

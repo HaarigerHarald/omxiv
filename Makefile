@@ -1,6 +1,6 @@
 OBJS=omxiv.o omx_image.o omx_render.o soft_image.o ./libnsbmp/libnsbmp.o ./libnsgif/libnsgif.o
 BIN=omxiv.bin
-LDFLAGS+=-lilclient -ljpeg -lpng
+LDFLAGS+=-lilclient -ljpeg -lpng -lrt
 INCLUDES+=-I./libnsbmp -I./libnsgif -I./libs/ilclient
 
 ifneq ($(CURL),0)
