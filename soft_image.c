@@ -333,10 +333,12 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size){
 	bmpImage->nData = stride* ALIGN16(bmpImage->height);
 
 	bmpImage->pData = bmpData;
-	int i;
+	
+	unsigned int pixWidth = bmpWidth*4;
+	unsigned int i;
 	for(i=bmpImage->height-1;i>0 ; i--){
 		memmove(bmpImage->pData + i* stride, 
-			bmpData +i* bmpWidth*4, bmpWidth*4);
+			bmpData +i* pixWidth, pixWidth);
 	}
 
 	return ret;
@@ -396,11 +398,11 @@ static int decodeNextGifFrame(ANIM_IMAGE *gifImage){
 		goto cleanup;
 	}
 	
-	unsigned int n;
-	for(n=0; n<gif->height; n++){
-		memcpy(gifImage->curFrame->pData + n* stride, 
-			gif->frame_image +n* gif->width*4, 
-			gif->width*4);
+	unsigned int pixWidth = gif->width*4;
+	unsigned int n, i, gifSize = pixWidth*gif->height;
+	for(n=0, i=0; n<gifSize; n+=pixWidth, i+=stride){
+		memcpy(gifImage->curFrame->pData + i, 
+			gif->frame_image +n, pixWidth);
 	}
 	
 	return SOFT_GIF_OK;
@@ -493,11 +495,11 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 		goto cleanup;
 	}
 	
-	unsigned int n;
-	for(n=0; n<gif->height; n++){
-		memcpy(gifImage->curFrame->pData + n* stride, 
-			gif->frame_image +n* gif->width*4, 
-			gif->width*4);
+	unsigned int pixWidth = gif->width*4;
+	unsigned int n, i, gifSize = pixWidth*gif->height;
+	for(n=0, i=0; n<gifSize; n+=pixWidth, i+=stride){
+		memcpy(gifImage->curFrame->pData + i, 
+			gif->frame_image +n, pixWidth);
 	}
 	
 	*data = NULL;
