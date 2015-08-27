@@ -283,8 +283,6 @@ static void* doRenderAnimation(void* params){
 end:
 	free(params);
 	anim->finaliseDecoding(anim);
-	pthread_mutex_destroy(&render->lock);
-	pthread_cond_destroy(&render->cond);
 	return NULL;
 }
 
@@ -323,6 +321,9 @@ void stopAnimation(OMX_RENDER *render){
 		pthread_cond_signal(&render->cond);
 		pthread_mutex_unlock(&render->lock);
 		pthread_join(render->animRenderThread, NULL);
+		
+		pthread_mutex_destroy(&render->lock);
+		pthread_cond_destroy(&render->cond);
 		render->renderAnimation = 0;
 	}
 }
