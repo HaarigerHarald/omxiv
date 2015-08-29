@@ -503,6 +503,12 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 	}
 	
 	*data = NULL;
+	if(gifImage->frameCount < 2){
+		gif_finalise(gif);
+		free(gifImage->imData);
+		free(gifImage->pExtraData);
+	}
+	
 	return SOFT_GIF_OK;
 	
 cleanup:
