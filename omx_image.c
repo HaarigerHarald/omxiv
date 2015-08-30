@@ -530,6 +530,7 @@ static int doResize(OMX_RESIZER *resizer, IMAGE *inImage, IMAGE *outImage){
 	if(ilclient_wait_for_event(resizer->component,OMX_EventPortSettingsChanged,resizer->outPort, 
 			0, 0, 1, ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, TIMEOUT_MS) == 0){	
 		
+		destroyImage(inImage);
 		retVal|= resizePortSettingsChanged(resizer, outImage);
 		if(retVal == OMX_RESIZE_OK){
 			if (OMX_FillThisBuffer(resizer->handle, 
