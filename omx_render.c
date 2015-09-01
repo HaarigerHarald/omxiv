@@ -127,7 +127,7 @@ static int doRender(OMX_RENDER *render, IMAGE *image){
 	return retVal;
 }
 
-int setDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf){
+int setOmxDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf){
 	OMX_CONFIG_DISPLAYREGIONTYPE dispConfRT;
 	memset(&dispConfRT, 0 , sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
 	dispConfRT.nPortIndex = render->inPort;
@@ -198,13 +198,17 @@ int setDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf){
 }
 
 
-int renderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConfig){
+int omxRenderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConfig,
+		OMX_RENDER_TRANSITION *transition){
 	render->renderAnimation = 0;
 	int ret = initRender(render);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
-	ret = setDisplayConfig(render, dispConfig);
+	if(transition->type == BLEND)
+		dispConfig->alpha = 15;
+	
+	ret = setOmxDisplayConfig(render, dispConfig);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
@@ -216,6 +220,15 @@ int renderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConf
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
+	
+	if(transition->type == BLEND){
+		while(dispConfig->alpha<255){
+			usleep(transition->durationMs*1000/24);
+			dispConfig->alpha+=20;
+			setOmxDisplayConfig(render, dispConfig);
+		}
+	}
+	
 	return OMX_RENDER_OK;
 }
 
@@ -286,13 +299,17 @@ end:
 	return NULL;
 }
 
-int renderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *dispConfig){
+int omxRenderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *dispConfig,
+		OMX_RENDER_TRANSITION *transition){
 	render->renderAnimation = 1;
 	int ret = initRender(render);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
-	ret = setDisplayConfig(render, dispConfig);
+	if(transition->type == BLEND)
+		dispConfig->alpha = 15;
+	
+	ret = setOmxDisplayConfig(render, dispConfig);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
@@ -311,6 +328,14 @@ int renderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *
 	
 	pthread_create(&render->animRenderThread, NULL, doRenderAnimation, animRenderParams);
 	
+	if(transition->type == BLEND){
+		while(dispConfig->alpha<255){
+			usleep(transition->durationMs*1000/24);
+			dispConfig->alpha+=20;
+			setOmxDisplayConfig(render, dispConfig);
+		}
+	}
+	
 	return OMX_RENDER_OK;
 }
 
@@ -328,7 +353,7 @@ void stopAnimation(OMX_RENDER *render){
 	}
 }
 
-int stopImageRender(OMX_RENDER *render){
+int stopOmxImageRender(OMX_RENDER *render){
 	int retVal=OMX_RENDER_OK;
 	
 	stopAnimation(render);
@@ -352,6 +377,8 @@ int stopImageRender(OMX_RENDER *render){
 	list[0]=render->component;
 	list[1]=NULL;
 	ilclient_cleanup_components(list);
+	
+	render->component = NULL;
 	
 	return retVal;
 }
