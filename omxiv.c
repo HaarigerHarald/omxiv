@@ -517,8 +517,8 @@ int main(int argc, char *argv[]){
 	render.client=client;
 	unsigned long lShowTime = 0;
 	unsigned long cTime;
-	IMAGE image = INIT_IMAGE;
-	ANIM_IMAGE anim = INIT_ANIM_IMAGE;
+	IMAGE image = {0};
+	ANIM_IMAGE anim = {0};
 	
 	ret=decodeImage(files[0], &image, &anim, info, color, &dispConfig, soft);
 
@@ -544,7 +544,6 @@ int main(int argc, char *argv[]){
 	char c=0, paused=0;
 	while(!end){
 		if(keys){
-			tcflush(0, TCIFLUSH);
 			c = getch(1);
 			if(end)
 				break;
@@ -572,6 +571,7 @@ int main(int argc, char *argv[]){
 		}else if(c == 'q' || c =='Q'){
 			break;
 		}else if(c == 'm' || c =='M'){
+			tcflush(0, TCIFLUSH);
 			dispConfig.configFlags^= OMX_DISP_CONFIG_FLAG_MIRROR;
 			ret = setOmxDisplayConfig(&render, &dispConfig);
 			if(ret != 0){
@@ -583,6 +583,7 @@ int main(int argc, char *argv[]){
 			if(c == 0)
 				break;
 			c = getch(1);
+			tcflush(0, TCIFLUSH);
 			if(c == 0x41){
 				if(dispConfig.rotation>0)
 					dispConfig.rotation-= 90;
@@ -625,6 +626,7 @@ int main(int argc, char *argv[]){
 				}
 			}
 		}else if(timeout > 0 && (c=='p' || c=='P')){
+			tcflush(0, TCIFLUSH);
 			paused ^=1;
 			if(paused)
 				printf("Paused\n");
