@@ -205,7 +205,7 @@ int omxRenderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispC
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
-	if(transition->type == BLEND)
+	if(transition != NULL && transition->type == BLEND)
 		dispConfig->alpha = 15;
 	
 	ret = setOmxDisplayConfig(render, dispConfig);
@@ -221,7 +221,7 @@ int omxRenderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispC
 		return ret;
 	}
 	
-	if(transition->type == BLEND){
+	if(transition != NULL && transition->type == BLEND){
 		while(dispConfig->alpha<255){
 			usleep(transition->durationMs*1000/24);
 			dispConfig->alpha+=20;
@@ -306,7 +306,7 @@ int omxRenderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CON
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
-	if(transition->type == BLEND)
+	if(transition != NULL && transition->type == BLEND)
 		dispConfig->alpha = 15;
 	
 	ret = setOmxDisplayConfig(render, dispConfig);
@@ -328,7 +328,7 @@ int omxRenderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CON
 	
 	pthread_create(&render->animRenderThread, NULL, doRenderAnimation, animRenderParams);
 	
-	if(transition->type == BLEND){
+	if(transition != NULL && transition->type == BLEND){
 		while(dispConfig->alpha<255){
 			usleep(transition->durationMs*1000/24);
 			dispConfig->alpha+=20;

@@ -517,15 +517,82 @@ cleanup:
 	return ret;
 }
 
-#ifdef USE_LIBCURL
-
 /**
  * Modified from: http://curl.haxx.se/libcurl/c/getinmemory.html 
  * Copyright (C) 1998 - 2015, Daniel Stenberg, <daniel@haxx.se>, et al.
  * Distributed under: http://curl.haxx.se/docs/copyright.html
 **/
 
-#include <curl/curl.h>
+#include <dlfcn.h>
+
+static void *libHandle = NULL;
+static void (*curl_global_init)(int);
+static void* (*curl_easy_init)(void);
+static void (*curl_easy_setopt)(void*, int, ...);
+static int (*curl_easy_perform)(void*);
+static void (*curl_easy_cleanup)(void*);
+static void (*curl_global_cleanup)(void);
+
+void unloadLibCurl(){
+	if(libHandle)
+		dlclose(libHandle);
+	libHandle = NULL;
+}
+
+static int loadLibCurl(){
+	if(libHandle == NULL){
+		char *error= NULL;
+		
+#ifdef LCURL_NAME
+		if(strcmp(LCURL_NAME, "") != 0)
+			libHandle = dlopen(LCURL_NAME, RTLD_LAZY);
+#endif
+		if(!libHandle)
+			libHandle = dlopen("libcurl.so.4", RTLD_LAZY);
+		if (!libHandle){
+			libHandle = dlopen("libcurl.so", RTLD_LAZY);
+		
+			if (!libHandle){
+				libHandle = dlopen("libcurl.so.3", RTLD_LAZY);
+			
+				if (!libHandle)
+					goto error;
+			}
+		}
+
+		curl_global_init = dlsym(libHandle, "curl_global_init");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		curl_easy_init = dlsym(libHandle, "curl_easy_init");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		curl_easy_setopt = dlsym(libHandle, "curl_easy_setopt");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		curl_easy_perform = dlsym(libHandle, "curl_easy_perform");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		curl_easy_cleanup = dlsym(libHandle, "curl_easy_cleanup");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		curl_global_cleanup = dlsym(libHandle, "curl_global_cleanup");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		return 0;
+		
+error:
+	fprintf(stderr, "%s\n", error);
+	unloadLibCurl();
+	return 1;
+	}
+	return 0;
+}
 
 struct MemoryStruct {
 	unsigned char *memory;
@@ -549,40 +616,41 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 }
 
 unsigned char* getImageFromUrl(const char *url, size_t *size){
-	CURL *curl_handle;
-	CURLcode res;
+	void *curl_handle;
+	int res;
 
-	struct MemoryStruct chunk;
+	struct MemoryStruct chunk = {0};
+	
+	if(loadLibCurl() != 0){
+		return NULL;
+	}
 
-	chunk.memory = NULL;
-	chunk.size = 0;
+	(*curl_global_init)(/* CURL_GLOBAL_ALL */ 3 );
 
-	curl_global_init(CURL_GLOBAL_ALL);
+	curl_handle = (*curl_easy_init)();
 
-	curl_handle = curl_easy_init();
+	(*curl_easy_setopt)(curl_handle, /* CURLOPT_URL */ 10002, url);
 
-	curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+	(*curl_easy_setopt)(curl_handle, /* CURLOPT_WRITEFUNCTION */ 20011,
+			WriteMemoryCallback);
 
-	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+	(*curl_easy_setopt)(curl_handle, /* CURLOPT_WRITEDATA */ 10001, (void *)&chunk);
 
-	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)&chunk);
+	(*curl_easy_setopt)(curl_handle, /* CURLOPT_USERAGENT */ 10018, "libcurl-agent/1.0");
 
-	curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+	res = (*curl_easy_perform)(curl_handle);
 
-	res = curl_easy_perform(curl_handle);
-
-	if(res != CURLE_OK) {
+	if(res != 0) {
 		free(chunk.memory);
 		chunk.memory=NULL;
 		chunk.size = 0;
-		printf("libCurl returned error code %d\n", res);
+		fprintf(stderr, "libCurl returned error code %d\n", res);
 	}
 	
 	*size= chunk.size;
 
-	curl_easy_cleanup(curl_handle);
-	curl_global_cleanup();
+	(*curl_easy_cleanup)(curl_handle);
+	(*curl_global_cleanup)();
 	
 	return chunk.memory;
 }
-#endif	

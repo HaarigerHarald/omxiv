@@ -14,9 +14,6 @@
 #include "soft_image.h"
 #include "bcm_host.h"
 
-#define str(s) #s
-#define TO_STR(s) str(s)
-
 static const char magNumJpeg[] = {0xff, 0xd8, 0xff};
 static const char magNumPng[] = {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1A, 0x0A};
 static const char magNumBmp[] = {0x42, 0x4d};
@@ -124,9 +121,9 @@ void printUsage(const char *progr){
 	printf("    -v  --version               Show version info\n");
 	printf("    -t                  n       Time in s between 2 images in a slide show\n");
 	printf("    -b  --blank                 Set background to black\n");
-	printf("    -T  --transition   Type     Type: none(default), blend\n\n");
-	printf("        --duration      n       Transition duration in ms\n\n");
-	printf("    -y  --yuv420                Use YUV420 for rendering instead of RGBA\n\n");
+	printf("    -T  --transition   Type     Type: none(default), blend\n");
+	printf("        --duration      n       Transition duration in ms\n");
+	printf("    -y  --yuv420                Use YUV420 for rendering instead of RGBA\n");
 	printf("        --win 'x1 y1 x2 y2'     Position of image window\n");
 	printf("        --win x1,y1,x2,y2       Position of image window\n");
 	printf("    -f  --fill                  Use the whole screen for the image\n");
@@ -197,7 +194,6 @@ static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info
 	size_t size = 0;
 	char magNum[8];
 	
-#ifdef USE_LIBCURL
 	if(strncmp(filePath, "http://", 7) == 0 || strncmp(filePath, "https://", 8) == 0){
 		if(info)
 			printf("Open Url: %s\n", filePath);
@@ -207,9 +203,7 @@ static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info
 			return 0x200;
 		}
 		imageFile = fmemopen((void*) httpImMem, size, "rb");
-	}else
-#endif	
-	{
+	}else{
 		if(info)
 			printf("Open file: %s\n", filePath);
 	
@@ -333,11 +327,8 @@ static int isBackgroundProc() {
 }
 
 static void printVersion(){
-	printf("Version: %s\n", TO_STR(VERSION));
+	printf("Version: %s\n", VERSION);
 	printf("Build date: %s\n", __DATE__);
-#ifndef USE_LIBCURL
-	printf("No libcurl support\n");  
-#endif
 }
 
 int main(int argc, char *argv[]){
@@ -642,6 +633,7 @@ int main(int argc, char *argv[]){
 	}
 
 	free(image.pData);
+	unloadLibCurl();
 
 	if(keys)
 		resetTerm();

@@ -72,4 +72,5 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 
 /* Get Image from Url */
 unsigned char* getImageFromUrl(const char *url, size_t *size);
+void unloadLibCurl();
 
