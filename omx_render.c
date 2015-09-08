@@ -240,6 +240,7 @@ struct ANIM_RENDER_PARAMS{
 static void* doRenderAnimation(void* params){
 	OMX_RENDER *render = ((struct ANIM_RENDER_PARAMS *)params)->render;
 	ANIM_IMAGE *anim = ((struct ANIM_RENDER_PARAMS *)params)->anim;
+	free(params);
 	int ret=0;
 	unsigned int i;
 	struct timespec wait;
@@ -294,7 +295,6 @@ static void* doRenderAnimation(void* params){
 	}
 	
 end:
-	free(params);
 	anim->finaliseDecoding(anim);
 	return NULL;
 }

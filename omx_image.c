@@ -30,12 +30,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <time.h>
 
 #include "omx_image.h"
 #include "bcm_host.h"
 
 #define TIMEOUT_MS 1500
 #define DECODER_BUFFER_NUM 2
+#define MAX_EMPTY_BUFFER_WAIT_MS 200
+
+#define ALIGN2(x) (((x+1)>>1)<<1)
 
 // Jpeg decoder
 
@@ -186,6 +190,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	char pSettingsChanged = 0, end = 0, eos = 0, bFilled = 0;
 	int bufferIndex = 0;
 	int retVal = OMX_JPEG_OK;
+	struct timespec wait;
 	
 	OMX_BUFFERHEADERTYPE *pBufHeader = decoder->ppInputBufferHeader[bufferIndex];
 	ilclient_set_empty_buffer_done_callback(decoder->client, emptyBufferDone, decoder);
@@ -250,10 +255,16 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		}
 		
 		if(!decoder->emptyBDone){
-			decoder->emptyBDone=2;
-			pthread_mutex_lock(&decoder->lock);
-			pthread_cond_wait(&decoder->cond, &decoder->lock);
-			pthread_mutex_unlock(&decoder->lock);
+			clock_gettime(CLOCK_REALTIME, &wait);
+			wait.tv_nsec += MAX_EMPTY_BUFFER_WAIT_MS*1000000L;
+			wait.tv_sec += wait.tv_nsec/1000000000L;
+			wait.tv_nsec %= 1000000000L;
+			if(!decoder->emptyBDone){
+				decoder->emptyBDone=2;
+				pthread_mutex_lock(&decoder->lock);
+				pthread_cond_timedwait(&decoder->cond, &decoder->lock, &wait);
+				pthread_mutex_unlock(&decoder->lock);
+			}
 		}
 		
 		if(pSettingsChanged == 0 && ilclient_wait_for_event(decoder->component,
@@ -636,10 +647,10 @@ int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, const int
 
 	if(dAspect > iAspect){
 		outImage->height = sHeight;
-		outImage->width = sHeight * iAspect;
+		outImage->width = ALIGN2((int) (sHeight * iAspect));
 	}else{
 		outImage->width = sWidth;
-		outImage->height = sWidth / iAspect;
+		outImage->height = ALIGN2((int) (sWidth / iAspect));
 	}
 	
 	return omxResize(client, inImage, outImage);
