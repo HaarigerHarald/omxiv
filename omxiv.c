@@ -225,7 +225,7 @@ static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info
 
 		JPEG_INFO jInfo;
 		ret=readJpegHeader(imageFile, &jInfo);
-		if(ret != SOFT_JPEG_OK){
+		if(ret != SOFT_IMAGE_OK){
 			fclose(imageFile);
 			free(httpImMem);
 			return ret;
@@ -247,7 +247,8 @@ static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info
 	}else if(memcmp(magNum, magNumBmp, sizeof(magNumBmp)) == 0){
 		ret = softDecodeBMP(imageFile, image, &httpImMem, size);
 	}else if(memcmp(magNum, magNumGif, sizeof(magNumGif)) == 0){
-		ret = softDecodeGif(imageFile, anim, image, &httpImMem, size);
+		anim->curFrame = image;
+		ret = softDecodeGif(imageFile, anim, &httpImMem, size);
 	}else{
 		printf("Unsupported image\n");
 		fclose(imageFile);
@@ -269,7 +270,7 @@ static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info
 			
 		ret = omxAutoResize(client, image, &image2, dispConfig->display, dispConfig->rotation, 
 				dispConfig->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT);
-		if(ret != OMX_RESIZE_OK){
+		if(ret != OMX_IMAGE_OK){
 			printf("resize returned 0x%x\n", ret);
 		}else{
 			cpyImage(&image2, image);
@@ -364,7 +365,7 @@ int main(int argc, char *argv[]){
 			}else if(strcmp(argv[i], "--no-aspect") == 0){
 				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
 			}else if(strcmp(argv[i], "--yuv420") == 0){
-				color = COLOR_SPACE_YUV420_PACKED;
+				color = COLOR_SPACE_YUV420P;
 			}else if(strcmp(argv[i], "--no-keys") == 0){
 				keys=0;
 			}else if(strcmp(argv[i], "--mirror") == 0){
@@ -444,7 +445,7 @@ int main(int argc, char *argv[]){
 				if(strstr(argv[i], "m") != NULL)
 					dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
 				if(strstr(argv[i], "y") != NULL)
-					color = COLOR_SPACE_YUV420_PACKED;
+					color = COLOR_SPACE_YUV420P;
 				if(strstr(argv[i], "s") != NULL)
 					soft=1;
 				if(strstr(argv[i], "k") != NULL)

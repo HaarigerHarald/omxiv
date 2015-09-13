@@ -25,27 +25,21 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef OMXIMAGE_H
+#define OMXIMAGE_H
+
 #include "ilclient.h"
 #include "image_def.h"
 
-#define OMX_JPEG_OK 0x0
-#define OMX_JPEG_ERROR_MEMORY  0x1
-#define OMX_JPEG_ERROR_CREATING_COMP 0x2
-#define OMX_JPEG_ERROR_UNKNOWN 0x4
-#define OMX_JPEG_ERROR_PORTS 0x8
-#define OMX_JPEG_ERROR_EXECUTING 0x10
-#define OMX_JPEG_ERROR_NO_EOS 0x20
-#define OMX_JPEG_ERROR_FILE_NOT_FOUND 0x40
-#define OMX_JPEG_ERROR_READING 0x80
-
-#define OMX_RESIZE_OK 0x0
-#define OMX_RESIZE_ERROR_MEMORY  0x1
-#define OMX_RESIZE_ERROR_CREATING_COMP 0x2
-#define OMX_RESIZE_ERROR_UNKNOWN 0x4
-#define OMX_RESIZE_ERROR_PORTS 0x8
-#define OMX_RESIZE_ERROR_NO_EOS 0x10
-#define OMX_RESIZE_ERROR_PARAMETER 0x20
-
+#define OMX_IMAGE_OK 0x0
+#define OMX_IMAGE_ERROR_MEMORY  0x1
+#define OMX_IMAGE_ERROR_CREATING_COMP 0x2
+#define OMX_IMAGE_ERROR_PORTS 0x4
+#define OMX_IMAGE_ERROR_EXECUTING 0x8
+#define OMX_IMAGE_ERROR_NO_EOS 0x10
+#define OMX_IMAGE_ERROR_FILE_NOT_FOUND 0x20
+#define OMX_IMAGE_ERROR_READING 0x40
+#define OMX_IMAGE_ERROR_PARAMETER 0x80
 
 /** Decodes jpeg image. Decoded images are in yuv420 color space.
  *  Note: Can't decode progressive jpegs or jpegs with more than
@@ -64,4 +58,4 @@ int omxResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage);
 int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, const int display, 
 			const int rotation, const char noAspect);
 
-
+#endif

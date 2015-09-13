@@ -85,26 +85,23 @@ static int portSettingsChanged(JPEG_DECODER *decoder, IMAGE *jpeg){
 	jpeg->height = portdef.format.image.nFrameHeight;
 	jpeg->nData = portdef.nBufferSize;
 	
-	if(portdef.format.image.eColorFormat == OMX_COLOR_FormatYUV420PackedSemiPlanar)
-		jpeg->colorSpace = COLOR_SPACE_YUV420_PACKED_SEMI;
-	else if(portdef.format.image.eColorFormat == OMX_COLOR_FormatYUV420PackedPlanar)
-		jpeg->colorSpace = COLOR_SPACE_YUV420_PACKED;
+	jpeg->colorSpace = COLOR_SPACE_YUV420P;
 	
 	OMX_SendCommand(decoder->handle, OMX_CommandPortEnable, decoder->outPort, NULL);  
 	
 	jpeg->pData=malloc(jpeg->nData);
 	if(jpeg->pData == NULL){
 		jpeg->nData=0;
-		return OMX_JPEG_ERROR_MEMORY;
+		return OMX_IMAGE_ERROR_MEMORY;
 	}
 	
 	ret = OMX_UseBuffer(decoder->handle, &decoder->pOutputBufferHeader, 
 			decoder->outPort, NULL, portdef.nBufferSize, (OMX_U8 *) jpeg->pData);
 	
 	if (ret != OMX_ErrorNone) {
-		return OMX_JPEG_ERROR_MEMORY;
+		return OMX_IMAGE_ERROR_MEMORY;
 	}
-	return OMX_JPEG_OK;
+	return OMX_IMAGE_OK;
 }
 
 static int prepareDecoder(JPEG_DECODER *decoder){
@@ -116,7 +113,7 @@ static int prepareDecoder(JPEG_DECODER *decoder){
 				ILCLIENT_ENABLE_OUTPUT_BUFFERS);
 
 	if (ret != 0) {
-		return OMX_JPEG_ERROR_CREATING_COMP;
+		return OMX_IMAGE_ERROR_CREATING_COMP;
 	}
 	
 	decoder->handle =ILC_GET_HANDLE(decoder->component);
@@ -128,14 +125,14 @@ static int prepareDecoder(JPEG_DECODER *decoder){
 	
 	OMX_GetParameter(decoder->handle, OMX_IndexParamImageInit, &port);
 	if (port.nPorts != 2) {
-		return OMX_JPEG_ERROR_PORTS;
+		return OMX_IMAGE_ERROR_PORTS;
 	}
 	decoder->inPort = port.nStartPortNumber;
 	decoder->outPort = port.nStartPortNumber + 1;
 	
 	decoder->pOutputBufferHeader = NULL;
 	
-	return OMX_JPEG_OK;
+	return OMX_IMAGE_OK;
 }
 
 static int startupDecoder(JPEG_DECODER * decoder){
@@ -167,29 +164,29 @@ static int startupDecoder(JPEG_DECODER * decoder){
 					&(decoder->ppInputBufferHeader[i]),
 					decoder->inPort,
 					NULL, portdef.nBufferSize) != OMX_ErrorNone) {
-			return OMX_JPEG_ERROR_MEMORY;
+			return OMX_IMAGE_ERROR_MEMORY;
 		}
 	}
 	
 	int ret = ilclient_wait_for_event(decoder->component, OMX_EventCmdComplete, 
 				OMX_CommandPortEnable, 0, decoder->inPort, 0, 0, TIMEOUT_MS);
 	if (ret != 0) {
-		return OMX_JPEG_ERROR_PORTS;
+		return OMX_IMAGE_ERROR_PORTS;
 	}
 	
 	ret = OMX_SendCommand(decoder->handle, OMX_CommandStateSet, OMX_StateExecuting, NULL);
 	if (ret != OMX_ErrorNone) {
-		return OMX_JPEG_ERROR_EXECUTING;
+		return OMX_IMAGE_ERROR_EXECUTING;
 	}
 	
-	return OMX_JPEG_OK;
+	return OMX_IMAGE_OK;
 }
 
 static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	
 	char pSettingsChanged = 0, end = 0, eos = 0, bFilled = 0;
 	int bufferIndex = 0;
-	int retVal = OMX_JPEG_OK;
+	int retVal = OMX_IMAGE_OK;
 	struct timespec wait;
 	
 	OMX_BUFFERHEADERTYPE *pBufHeader = decoder->ppInputBufferHeader[bufferIndex];
@@ -205,14 +202,14 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	if(feof(sourceImage)){
 		pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
 	}else if( pBufHeader->nFilledLen !=  pBufHeader->nAllocLen){
-		retVal|=OMX_JPEG_ERROR_READING;
+		retVal|=OMX_IMAGE_ERROR_READING;
 		end=1;
 	}
 	
 	pthread_mutex_init(&decoder->lock, NULL);
 	pthread_cond_init(&decoder->cond, NULL);
 	
-	while(end == 0 && retVal == OMX_JPEG_OK){
+	while(end == 0 && retVal == OMX_IMAGE_OK){
 		decoder->emptyBDone=0;
 		// We've got an eos event early this usually means that we are done decoding
 		if(ilclient_remove_event(decoder->component, OMX_EventBufferFlag, decoder->outPort, 
@@ -222,7 +219,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		}		
 		int ret = OMX_EmptyThisBuffer(decoder->handle, pBufHeader);
 		if (ret != OMX_ErrorNone) {
-			retVal|=OMX_JPEG_ERROR_MEMORY;
+			retVal|=OMX_IMAGE_ERROR_MEMORY;
 			break;
 		}
 		
@@ -240,7 +237,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 			if(feof(sourceImage)){
 				pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
 			}else if( pBufHeader->nFilledLen !=  pBufHeader->nAllocLen){
-				retVal|=OMX_JPEG_ERROR_READING;
+				retVal|=OMX_IMAGE_ERROR_READING;
 				break;
 			}
 			
@@ -276,11 +273,11 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		}
 			
 			
-		if (bFilled == 0 && pSettingsChanged==1 && retVal == OMX_JPEG_OK) {
+		if (bFilled == 0 && pSettingsChanged==1 && retVal == OMX_IMAGE_OK) {
 		
 			ret = OMX_FillThisBuffer(decoder->handle, decoder->pOutputBufferHeader);
 			if (ret != OMX_ErrorNone) {
-				retVal|=OMX_JPEG_ERROR_MEMORY;
+				retVal|=OMX_IMAGE_ERROR_MEMORY;
 				break;
 			}
 			bFilled = 1;
@@ -290,7 +287,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	
 	if( bFilled == 1 && !eos && ilclient_wait_for_event(decoder->component, OMX_EventBufferFlag, 
 				decoder->outPort, 0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, TIMEOUT_MS) != 0 ){
-		retVal|=OMX_JPEG_ERROR_NO_EOS;
+		retVal|=OMX_IMAGE_ERROR_NO_EOS;
 	}
 	
 	pthread_mutex_destroy(&decoder->lock);
@@ -300,14 +297,14 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	for (i = 0; i < DECODER_BUFFER_NUM; i++) {
 		int ret = OMX_FreeBuffer(decoder->handle,decoder->inPort, decoder->ppInputBufferHeader[i]);
 		if(ret!= OMX_ErrorNone){
-			retVal|=OMX_JPEG_ERROR_MEMORY;
+			retVal|=OMX_IMAGE_ERROR_MEMORY;
 		}
 	}
 	
 	int ret=OMX_SendCommand(decoder->handle, OMX_CommandPortDisable, decoder->inPort, NULL);
 	
 	if(ret!= OMX_ErrorNone){
-		retVal|=OMX_JPEG_ERROR_PORTS;
+		retVal|=OMX_IMAGE_ERROR_PORTS;
 	}
 			
 	ilclient_wait_for_event(decoder->component, OMX_EventCmdComplete, 
@@ -323,7 +320,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		ret= OMX_FreeBuffer(decoder->handle, decoder->outPort, decoder->pOutputBufferHeader);
 		
 		if(ret!= OMX_ErrorNone){
-			retVal|=OMX_JPEG_ERROR_MEMORY;
+			retVal|=OMX_IMAGE_ERROR_MEMORY;
 		}
 		
 	}
@@ -332,7 +329,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		ret= OMX_SendCommand(decoder->handle, OMX_CommandPortDisable, decoder->outPort, NULL);
 		
 		if(ret!= OMX_ErrorNone){
-			retVal|=OMX_JPEG_ERROR_PORTS;
+			retVal|=OMX_IMAGE_ERROR_PORTS;
 		}
 	}
 	
@@ -347,18 +344,18 @@ int omxDecodeJpeg(ILCLIENT_T *client, FILE *sourceFile, IMAGE *jpeg){
 	JPEG_DECODER decoder;
 	decoder.client=client;
 	if(!sourceFile)
-		return OMX_JPEG_ERROR_FILE_NOT_FOUND;
+		return OMX_IMAGE_ERROR_FILE_NOT_FOUND;
 	
 	int ret = prepareDecoder(&decoder);
-	if (ret != OMX_JPEG_OK)
+	if (ret != OMX_IMAGE_OK)
 		return ret;
 		
 	ret = startupDecoder(&decoder);
-	if (ret != OMX_JPEG_OK)
+	if (ret != OMX_IMAGE_OK)
 		return ret;
 		
 	ret = decodeJpeg(&decoder, sourceFile, jpeg);
-	if (ret != OMX_JPEG_OK)
+	if (ret != OMX_IMAGE_OK)
 		return ret;
 	
 	COMPONENT_T *list[2];
@@ -390,7 +387,7 @@ static int prepareResizer(OMX_RESIZER *resizer){
 					ILCLIENT_ENABLE_INPUT_BUFFERS|
 					ILCLIENT_ENABLE_OUTPUT_BUFFERS);
 	if (ret != 0) {
-		return OMX_RESIZE_ERROR_CREATING_COMP;
+		return OMX_IMAGE_ERROR_CREATING_COMP;
 	}
 
 	resizer->handle = ILC_GET_HANDLE(resizer->component);
@@ -401,14 +398,14 @@ static int prepareResizer(OMX_RESIZER *resizer){
 
 	OMX_GetParameter(resizer->handle,OMX_IndexParamImageInit, &port);
 	if (port.nPorts != 2) {
-		return OMX_RESIZE_ERROR_PORTS;
+		return OMX_IMAGE_ERROR_PORTS;
 	}
 	resizer->inPort = port.nStartPortNumber;
 	resizer->outPort = port.nStartPortNumber + 1;
 
 	resizer->pOutputBufferHeader = NULL;
 	
-	return OMX_RESIZE_OK;
+	return OMX_IMAGE_OK;
 }
 
 
@@ -424,7 +421,7 @@ static int startupResizer(OMX_RESIZER *resizer, IMAGE *inImage){
 
 	ret = OMX_GetParameter(resizer->handle, OMX_IndexParamPortDefinition, &portdef);
 	if (ret != OMX_ErrorNone) {
-		return OMX_RESIZE_ERROR_PARAMETER;
+		return OMX_IMAGE_ERROR_PARAMETER;
 	}
 	
 	portdef.format.image.eCompressionFormat = OMX_IMAGE_CodingUnused;
@@ -435,10 +432,8 @@ static int startupResizer(OMX_RESIZER *resizer, IMAGE *inImage){
 	portdef.format.image.nSliceHeight = 0;
 	
 	
-	if(inImage->colorSpace == COLOR_SPACE_YUV420_PACKED)
+	if(inImage->colorSpace == COLOR_SPACE_YUV420P)
 		portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar;
-	else if(inImage->colorSpace == COLOR_SPACE_YUV420_PACKED_SEMI)
-		portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedSemiPlanar;
 	else if(inImage->colorSpace == COLOR_SPACE_RGBA)
 		portdef.format.image.eColorFormat = OMX_COLOR_Format32bitABGR8888;
 	else if(inImage->colorSpace == COLOR_SPACE_RGB16)
@@ -449,24 +444,24 @@ static int startupResizer(OMX_RESIZER *resizer, IMAGE *inImage){
 
 	ret = OMX_SetParameter(resizer->handle, OMX_IndexParamPortDefinition, &portdef);
 	if (ret != OMX_ErrorNone) {	
-		return OMX_RESIZE_ERROR_PARAMETER;
+		return OMX_IMAGE_ERROR_PARAMETER;
 	}
 	
 	ret = OMX_SendCommand(resizer->handle, OMX_CommandPortEnable, resizer->inPort, NULL);
 	if(ret != OMX_ErrorNone){
-		return OMX_RESIZE_ERROR_PORTS;
+		return OMX_IMAGE_ERROR_PORTS;
 	}
 
 	ret = OMX_UseBuffer(resizer->handle,&resizer->pInputBufferHeader,resizer->inPort, 
 			NULL, portdef.nBufferSize, (OMX_U8 *) inImage->pData);
 			
 	if(ret != OMX_ErrorNone){
-		return OMX_RESIZE_ERROR_MEMORY;
+		return OMX_IMAGE_ERROR_MEMORY;
 	}
 	
 	ilclient_change_component_state(resizer->component, OMX_StateExecuting);
 	
-	return OMX_RESIZE_OK;
+	return OMX_IMAGE_OK;
 }
 
 static int resizePortSettingsChanged(OMX_RESIZER *resizer, IMAGE *outImage){
@@ -481,10 +476,8 @@ static int resizePortSettingsChanged(OMX_RESIZER *resizer, IMAGE *outImage){
 	portdef.format.image.eCompressionFormat = OMX_IMAGE_CodingUnused;
 	portdef.format.image.bFlagErrorConcealment = OMX_FALSE;
 	
-	if(outImage->colorSpace == COLOR_SPACE_YUV420_PACKED)
+	if(outImage->colorSpace == COLOR_SPACE_YUV420P)
 		portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar;
-	else if(outImage->colorSpace == COLOR_SPACE_YUV420_PACKED_SEMI)
-		portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedSemiPlanar;
 	else if(outImage->colorSpace == COLOR_SPACE_RGBA)
 		portdef.format.image.eColorFormat = OMX_COLOR_Format32bitABGR8888;
 	else if(outImage->colorSpace == COLOR_SPACE_RGB16)
@@ -497,17 +490,17 @@ static int resizePortSettingsChanged(OMX_RESIZER *resizer, IMAGE *outImage){
 	
 	ret = OMX_SetParameter(resizer->handle, OMX_IndexParamPortDefinition, &portdef);
 	if(ret != OMX_ErrorNone){
-		return OMX_RESIZE_ERROR_PARAMETER;
+		return OMX_IMAGE_ERROR_PARAMETER;
 	}
 	
 	ret = OMX_GetParameter(resizer->handle, OMX_IndexParamPortDefinition, &portdef);
 	if(ret != OMX_ErrorNone){
-		return OMX_RESIZE_ERROR_PARAMETER;
+		return OMX_IMAGE_ERROR_PARAMETER;
 	}
 	
 	ret = OMX_SendCommand(resizer->handle, OMX_CommandPortEnable, resizer->outPort, NULL);
 	if(ret != OMX_ErrorNone){
-		return OMX_RESIZE_ERROR_PORTS;
+		return OMX_IMAGE_ERROR_PORTS;
 	}
 	
 	outImage->nData = portdef.nBufferSize;
@@ -515,27 +508,27 @@ static int resizePortSettingsChanged(OMX_RESIZER *resizer, IMAGE *outImage){
 	outImage->pData=malloc(outImage->nData);
 	if(outImage->pData == NULL){
 		outImage->nData=0;
-		return OMX_RESIZE_ERROR_MEMORY;
+		return OMX_IMAGE_ERROR_MEMORY;
 	}
 	
 	ret = OMX_UseBuffer(resizer->handle, &resizer->pOutputBufferHeader, 
 			resizer->outPort, NULL, portdef.nBufferSize, (OMX_U8 *) outImage->pData);
 	
 	if (ret != OMX_ErrorNone) {
-		return OMX_RESIZE_ERROR_MEMORY;
+		return OMX_IMAGE_ERROR_MEMORY;
 	}
-	return OMX_RESIZE_OK;
+	return OMX_IMAGE_OK;
 }
 
 static int doResize(OMX_RESIZER *resizer, IMAGE *inImage, IMAGE *outImage){
-	int retVal= OMX_RESIZE_OK;
+	int retVal= OMX_IMAGE_OK;
 	OMX_BUFFERHEADERTYPE *pBufHeader = resizer->pInputBufferHeader;
 	pBufHeader->nFilledLen=inImage->nData;
 	pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
 	
 	int ret = OMX_EmptyThisBuffer(resizer->handle, pBufHeader);
 	if (ret != OMX_ErrorNone) {
-		 retVal |= OMX_RESIZE_ERROR_MEMORY;
+		 retVal |= OMX_IMAGE_ERROR_MEMORY;
 	}
 	
 	if(ilclient_wait_for_event(resizer->component,OMX_EventPortSettingsChanged,resizer->outPort, 
@@ -543,10 +536,10 @@ static int doResize(OMX_RESIZER *resizer, IMAGE *inImage, IMAGE *outImage){
 		
 		destroyImage(inImage);
 		retVal|= resizePortSettingsChanged(resizer, outImage);
-		if(retVal == OMX_RESIZE_OK){
+		if(retVal == OMX_IMAGE_OK){
 			if (OMX_FillThisBuffer(resizer->handle, 
 				resizer->pOutputBufferHeader) != OMX_ErrorNone) {
-				retVal|=OMX_RESIZE_ERROR_MEMORY;
+				retVal|=OMX_IMAGE_ERROR_MEMORY;
 			}
 		}		
 	}
@@ -554,17 +547,17 @@ static int doResize(OMX_RESIZER *resizer, IMAGE *inImage, IMAGE *outImage){
 	if(ilclient_wait_for_event(resizer->component, OMX_EventBufferFlag, resizer->outPort, 
 				0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, TIMEOUT_MS) != 0){
 		
-		retVal|= OMX_RESIZE_ERROR_NO_EOS;
+		retVal|= OMX_IMAGE_ERROR_NO_EOS;
 	}
 	
 	ret= OMX_FreeBuffer(resizer->handle, resizer->inPort, resizer->pInputBufferHeader);
 	if(ret!= OMX_ErrorNone){
-		retVal|=OMX_RESIZE_ERROR_MEMORY;
+		retVal|=OMX_IMAGE_ERROR_MEMORY;
 	}
 	
 	ret = OMX_SendCommand(resizer->handle, OMX_CommandPortDisable, resizer->inPort, NULL);
 	if(ret!= OMX_ErrorNone){
-		retVal |= OMX_RESIZE_ERROR_PORTS;
+		retVal |= OMX_IMAGE_ERROR_PORTS;
 	}
 		
 	ilclient_wait_for_event(resizer->component, OMX_EventCmdComplete, 
@@ -578,12 +571,12 @@ static int doResize(OMX_RESIZER *resizer, IMAGE *inImage, IMAGE *outImage){
 			
 	ret= OMX_FreeBuffer(resizer->handle, resizer->outPort, resizer->pOutputBufferHeader);	
 	if(ret!= OMX_ErrorNone){
-		retVal|=OMX_RESIZE_ERROR_MEMORY;
+		retVal|=OMX_IMAGE_ERROR_MEMORY;
 	}
 	
 	ret= OMX_SendCommand(resizer->handle, OMX_CommandPortDisable, resizer->outPort, NULL);	
 	if(ret!= OMX_ErrorNone){
-		retVal|=OMX_RESIZE_ERROR_PORTS;
+		retVal|=OMX_IMAGE_ERROR_PORTS;
 	}
 	
 	ilclient_change_component_state(resizer->component, OMX_StateIdle);
@@ -598,15 +591,15 @@ int omxResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage){
 	resizer.client=client;
 	resizer.pInputBufferHeader=NULL;
 	int ret = prepareResizer(&resizer);
-	if (ret != OMX_RESIZE_OK){
+	if (ret != OMX_IMAGE_OK){
 		return ret;
 	}
 	ret = startupResizer(&resizer, inImage);
-	if (ret != OMX_RESIZE_OK){
+	if (ret != OMX_IMAGE_OK){
 		return ret;
 	}
 	ret = doResize(&resizer, inImage, outImage);
-	if (ret != OMX_RESIZE_OK){
+	if (ret != OMX_IMAGE_OK){
 		return ret;
 	}
 	

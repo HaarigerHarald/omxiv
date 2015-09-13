@@ -85,10 +85,8 @@ static int setUpRender(OMX_RENDER *render, IMAGE *image){
 	
 	if(image->colorSpace == COLOR_SPACE_RGB24)
 		portdef.format.video.eColorFormat = OMX_COLOR_Format24bitBGR888;
-	else if(image->colorSpace == COLOR_SPACE_YUV420_PACKED)
+	else if(image->colorSpace == COLOR_SPACE_YUV420P)
 		portdef.format.video.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar;
-	else if(image->colorSpace == COLOR_SPACE_YUV420_PACKED_SEMI)
-		portdef.format.video.eColorFormat = OMX_COLOR_FormatYUV420PackedSemiPlanar;
 	else if(image->colorSpace == COLOR_SPACE_RGBA)
 		portdef.format.video.eColorFormat = OMX_COLOR_Format32bitABGR8888;
 	else if(image->colorSpace == COLOR_SPACE_RGB16)

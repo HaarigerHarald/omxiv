@@ -25,6 +25,9 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifndef OMXRENDER_H
+#define OMXRENDER_H
+ 
 #include "image_def.h"
 #include "ilclient.h"
 #include <pthread.h>
@@ -98,3 +101,4 @@ int omxRenderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CON
 
 void stopAnimation(OMX_RENDER *render);
 
+#endif

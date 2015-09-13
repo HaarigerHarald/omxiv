@@ -17,7 +17,7 @@ And install with:
 ## Supported images
 
 * **JPEGs**
-  - non-progressive: OMX image_decode
+  - non-progressive: OMX.broadcom.image_decode
   - progressive: libjpeg
   
 * **PNGs**

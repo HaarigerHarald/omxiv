@@ -33,13 +33,12 @@
 /* Color spaces OMX-Components support */
 #define COLOR_SPACE_RGB24 0
 #define COLOR_SPACE_RGBA 1
-#define COLOR_SPACE_YUV420_PACKED 2
-#define COLOR_SPACE_YUV420_PACKED_SEMI 3
-#define COLOR_SPACE_RGB16 4
+#define COLOR_SPACE_YUV420P 2
+#define COLOR_SPACE_RGB16 3
 
 typedef struct IMAGE{
 	char *pData;	/* Image pixel data */
-	size_t nData;	/* Alloc data length (=stride*height) */
+	size_t nData;	/* Alloc data length */
 	
 	unsigned int width;
 	unsigned int height;

@@ -64,7 +64,7 @@ int readJpegHeader(FILE *infile, JPEG_INFO *jpegInfo){
 	jerr.pub.error_exit = my_error_exit;
 	if (setjmp(jerr.setjmp_buffer)) {
 		jpeg_destroy_decompress(&cinfo);
-		return SOFT_JPEG_ERROR_DECODING;
+		return SOFT_IMAGE_ERROR_DECODING;
 	}
 
 	jpeg_create_decompress(&cinfo);
@@ -80,7 +80,7 @@ int readJpegHeader(FILE *infile, JPEG_INFO *jpegInfo){
 	
 	jpeg_destroy_decompress(&cinfo);
 	
-	return SOFT_JPEG_OK;
+	return SOFT_IMAGE_OK;
 }
 
 int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
@@ -93,7 +93,7 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	jerr.pub.error_exit = my_error_exit;
 	if (setjmp(jerr.setjmp_buffer)) {
 		jpeg_destroy_decompress(&cinfo);
-		return SOFT_JPEG_ERROR_DECODING;
+		return SOFT_IMAGE_ERROR_DECODING;
 	}
 	
 	jpeg_create_decompress(&cinfo);
@@ -124,7 +124,7 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	if(jpeg->pData == NULL){
 		jpeg_finish_decompress(&cinfo);
 		jpeg_destroy_decompress(&cinfo);
-		return SOFT_JPEG_ERROR_MEMORY;
+		return SOFT_IMAGE_ERROR_MEMORY;
 	}
 	
 	
@@ -143,10 +143,10 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	jpeg_destroy_decompress(&cinfo);
 	
 	if(jerr.pub.num_warnings != 0){
-		return SOFT_JPEG_ERROR_CORRUPT_DATA;
+		return SOFT_IMAGE_ERROR_CORRUPT_DATA;
 	}
 	
-	return SOFT_JPEG_OK;
+	return SOFT_IMAGE_OK;
 }
 
 /**
@@ -170,16 +170,16 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 
 	if (!png_ptr){
-		return SOFT_PNG_ERROR_CREATE_STRUCT;
+		return SOFT_IMAGE_ERROR_CREATE_STRUCT;
 	}
 	
 	info_ptr = png_create_info_struct(png_ptr);
 	if (!info_ptr){
-		return SOFT_PNG_ERROR_CREATE_STRUCT;
+		return SOFT_IMAGE_ERROR_CREATE_STRUCT;
 	}
 
 	if (setjmp(png_jmpbuf(png_ptr))){
-		return SOFT_PNG_ERROR_INIT;
+		return SOFT_IMAGE_ERROR_INIT;
 	}
 	
 	png_init_io(png_ptr, fp);
@@ -228,14 +228,14 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	
 	if (setjmp(png_jmpbuf(png_ptr))){
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return SOFT_PNG_ERROR_DECODING;	
+		return SOFT_IMAGE_ERROR_DECODING;	
 	}
 		
 	png->nData = ALIGN16(png->height)*stride;
 	png->pData = malloc(png->nData);
 	if(!png->pData){
 		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-		return SOFT_PNG_ERROR_MEMORY;
+		return SOFT_IMAGE_ERROR_MEMORY;
 	}
 	
 	png_bytep row_pointers[png->height];
@@ -249,7 +249,7 @@ int softDecodePng(FILE *fp, IMAGE* png){
 	png_read_end(png_ptr, NULL);
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 	
-	return SOFT_PNG_OK;
+	return SOFT_IMAGE_OK;
 }
 
 // BMP
@@ -291,13 +291,13 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size){
 
 		*data = malloc(size);
 		if (!*data) {
-			return SOFT_BMP_ERROR_MEMORY;
+			return SOFT_IMAGE_ERROR_MEMORY;
 		}
 
 		if (fread(*data, 1, size, fp) != size) {
 			free(*data);
 			*data = NULL;
-			return SOFT_BMP_ERROR_MEMORY;
+			return SOFT_IMAGE_ERROR_MEMORY;
 		}
 	}
 	
@@ -305,13 +305,13 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size){
 
 	code = bmp_analyse(&bmp, size, *data);
 	if (code != BMP_OK) {
-		ret = SOFT_BMP_ERROR_ANALYSING;
+		ret = SOFT_IMAGE_ERROR_ANALYSING;
 		goto cleanup;
 	}
 
 	code = bmp_decode(&bmp);
 	if (code != BMP_OK) {
-		ret = SOFT_BMP_ERROR_DECODING;
+		ret = SOFT_IMAGE_ERROR_DECODING;
 		goto cleanup;
 	}
 	
@@ -379,7 +379,7 @@ void destroyAnimImage(ANIM_IMAGE *animIm){
 static int decodeNextGifFrame(ANIM_IMAGE *gifImage){
 	
 	if(!gifImage->imData || !gifImage->curFrame->pData){
-		return SOFT_GIF_ERROR_MEMORY;
+		return SOFT_IMAGE_ERROR_MEMORY;
 	}
 	int ret;
 	
@@ -394,7 +394,7 @@ static int decodeNextGifFrame(ANIM_IMAGE *gifImage){
 	
 	code = gif_decode_frame(gif, gifImage->frameNum);
 	if (code != GIF_OK){
-		ret = SOFT_GIF_ERROR_DECODING;
+		ret = SOFT_IMAGE_ERROR_DECODING;
 		goto cleanup;
 	}
 	
@@ -405,7 +405,7 @@ static int decodeNextGifFrame(ANIM_IMAGE *gifImage){
 			gif->frame_image +n, pixWidth);
 	}
 	
-	return SOFT_GIF_OK;
+	return SOFT_IMAGE_OK;
 	
 cleanup:
 	destroyAnimImage(gifImage);
@@ -413,7 +413,7 @@ cleanup:
 	
 }
 
-int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** data, size_t size){
+int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, unsigned char** data, size_t size){
 	gif_bitmap_callback_vt bitmap_callbacks = {
 		gif_init,
 		gif_destroy,
@@ -426,10 +426,9 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 	int ret;
 	gif_animation* gif = malloc(sizeof(gif_animation));
 	if(!gif)
-		return SOFT_GIF_ERROR_MEMORY;
+		return SOFT_IMAGE_ERROR_MEMORY;
 	gif_result code;
 	gifImage->pExtraData = gif;
-	gifImage->curFrame = frame;
 	gifImage->frameCount = 0;
 	
 	if (!fp) {
@@ -444,13 +443,13 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 
 		*data = malloc(size);
 		if (!*data) {
-			return SOFT_GIF_ERROR_MEMORY;
+			return SOFT_IMAGE_ERROR_MEMORY;
 		}
 
 		if (fread(*data, 1, size, fp) != size) {
 			free(*data);
 			*data = NULL;
-			return SOFT_GIF_ERROR_MEMORY;
+			return SOFT_IMAGE_ERROR_MEMORY;
 		}
 	}
 	
@@ -464,7 +463,7 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 	do {
 		code = gif_initialise(gif, size, *data);
 		if (code != GIF_OK && code != GIF_WORKING){
-			ret = SOFT_GIF_ERROR_ANALYSING;
+			ret = SOFT_IMAGE_ERROR_ANALYSING;
 			goto cleanup;
 		}
 	} while (code != GIF_OK);
@@ -478,7 +477,7 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 	
 	gifImage->curFrame->pData = malloc(nData);
 	if(!gifImage->curFrame->pData){
-		ret = SOFT_GIF_ERROR_MEMORY;
+		ret = SOFT_IMAGE_ERROR_MEMORY;
 		goto cleanup;
 	}
 	
@@ -491,7 +490,7 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 
 	code = gif_decode_frame(gif, gifImage->frameNum);
 	if (code != GIF_OK){
-		ret = SOFT_GIF_ERROR_DECODING;
+		ret = SOFT_IMAGE_ERROR_DECODING;
 		goto cleanup;
 	}
 	
@@ -509,7 +508,7 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, IMAGE *frame, unsigned char** 
 		free(gifImage->pExtraData);
 	}
 	
-	return SOFT_GIF_OK;
+	return SOFT_IMAGE_OK;
 	
 cleanup:
 	destroyAnimImage(gifImage);
