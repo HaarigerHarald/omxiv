@@ -88,7 +88,7 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 	struct jpeg_decompress_struct cinfo;
 	struct my_error_mgr jerr;
 	JSAMPARRAY buffer;
-	int rowStride;
+	unsigned int rowStride;
 	
 	cinfo.err = jpeg_std_error(&jerr.pub);
 	jerr.pub.error_exit = my_error_exit;
@@ -120,7 +120,7 @@ int softDecodeJpeg(FILE *infile, IMAGE *jpeg){
 		((j_common_ptr) &cinfo, JPOOL_IMAGE, rowStride, 1);
 	size_t i, x,y;
 	
-	jpeg->nData = stride * cinfo.output_height;
+	jpeg->nData = stride * ALIGN16(cinfo.output_height);
 	jpeg->pData = malloc(jpeg->nData);
 	if(jpeg->pData == NULL){
 		jpeg_finish_decompress(&cinfo);
