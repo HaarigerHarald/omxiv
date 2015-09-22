@@ -38,6 +38,8 @@
 *.png
 *.bmp
 *.gif
+*.tif
+*.tiff
 
 # ilclient
 /libs

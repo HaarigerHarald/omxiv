@@ -31,6 +31,7 @@
 
 #include <jpeglib.h>
 #include <png.h>
+#include <tiffio.h>
 
 #include "soft_image.h"
 #include "libnsbmp/libnsbmp.h"
@@ -515,6 +516,56 @@ cleanup:
 	*data = NULL;
 	return ret;
 }
+
+static tsize_t tiffRead(thandle_t st, tdata_t buffer, tsize_t size){
+	return fread(buffer, 1, size, (FILE*)st);
+}
+
+static toff_t tiffSeek(thandle_t st, toff_t pos, int whence){
+	int ret = fseek((FILE*)st, pos, whence);
+	if(ret == 0)
+		return pos;
+	else
+		return -1;
+}
+
+static tsize_t dummyTiffWrite(thandle_t st,tdata_t buffer,tsize_t size){return 0;}
+static int dummyTiffClose(thandle_t st){return 0;}
+static toff_t dummyTiffSize(thandle_t st){return 0;}
+static int dummyTiffMap(thandle_t st, tdata_t* addr, toff_t* size){return 0;}
+static void dummyTiffUnmap(thandle_t st, tdata_t addr, toff_t size){}
+
+int softDecodeTIFF(FILE *fp, IMAGE* im){
+	int ret = SOFT_IMAGE_OK;
+	TIFF* tif = TIFFClientOpen("FILE", "r", (thandle_t)fp,
+		tiffRead, dummyTiffWrite, tiffSeek, dummyTiffClose, 
+		dummyTiffSize, dummyTiffMap, dummyTiffUnmap);
+	if(tif != NULL){
+		TIFFGetField(tif, TIFFTAG_IMAGEWIDTH,(uint32*) &im->width);
+		TIFFGetField(tif, TIFFTAG_IMAGELENGTH,(uint32*) &im->height);
+		unsigned int stride = ALIGN16(im->width)*4;
+		im->nData = stride*ALIGN16(im->height);
+		im->pData = malloc(im->nData);
+		if (im->pData != NULL){
+			if (TIFFReadRGBAImageOriented(tif, im->width, im->height,(uint32*) im->pData, 
+					ORIENTATION_TOPLEFT, 0)){
+				unsigned int pixWidth = im->width*4;
+				unsigned int i;
+				for(i=im->height-1;i>0; i--){
+					memmove(im->pData + i* stride, 
+						im->pData +i* pixWidth, pixWidth);
+				}
+			}else
+				ret = SOFT_IMAGE_ERROR_DECODING;
+		}else
+			ret = SOFT_IMAGE_ERROR_MEMORY;
+		TIFFClose(tif);
+	}else{
+		ret = SOFT_IMAGE_ERROR_FILE_OPEN;
+	}
+	return ret;
+}
+
 
 /**
  * Modified from: http://curl.haxx.se/libcurl/c/getinmemory.html 

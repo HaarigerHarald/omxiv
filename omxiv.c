@@ -14,10 +14,16 @@
 #include "soft_image.h"
 #include "bcm_host.h"
 
+#ifndef VERSION
+#define VERSION "UNKNOWN"
+#endif
+
 static const char magNumJpeg[] = {0xff, 0xd8, 0xff};
 static const char magNumPng[] = {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1A, 0x0A};
 static const char magNumBmp[] = {0x42, 0x4d};
 static const char magNumGif[] = {0x47, 0x49, 0x46, 0x38};
+static const char magNumTifLE[] = {0x49, 0x49, 0x2a, 0x00};
+static const char magNumTifBE[] = {0x4d, 0x4d, 0x00, 0x2a};
 
 static ILCLIENT_T *client=NULL;
 static char end=0;
@@ -71,7 +77,9 @@ static int imageFilter(const struct dirent *entry){
 			strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0 ||
 			strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0 ||
 			strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0 ||
-			strcmp(ext, ".gif") == 0 || strcmp(ext, ".GIF") == 0 ))
+			strcmp(ext, ".gif") == 0 || strcmp(ext, ".GIF") == 0 ||
+			strcmp(ext, ".tif") == 0 || strcmp(ext, ".TIF") == 0 ||
+			strcmp(ext, ".tiff") == 0 || strcmp(ext, ".TIFF") == 0))
 		return 1;
 	else
 		return 0;
@@ -246,6 +254,9 @@ static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info
 		ret = softDecodePng(imageFile, image);
 	}else if(memcmp(magNum, magNumBmp, sizeof(magNumBmp)) == 0){
 		ret = softDecodeBMP(imageFile, image, &httpImMem, size);
+	}else if(memcmp(magNum, magNumTifLE, sizeof(magNumTifLE)) == 0 ||
+			memcmp(magNum, magNumTifBE, sizeof(magNumTifBE)) == 0){
+		ret = softDecodeTIFF(imageFile, image);
 	}else if(memcmp(magNum, magNumGif, sizeof(magNumGif)) == 0){
 		anim->curFrame = image;
 		ret = softDecodeGif(imageFile, anim, &httpImMem, size);

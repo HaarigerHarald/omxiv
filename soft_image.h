@@ -52,7 +52,9 @@ typedef struct JPEG_INFO {
 int readJpegHeader(FILE *jpegFile, JPEG_INFO *jpegInfo);
 int softDecodeJpeg(FILE *jpegFile, IMAGE *jpeg);
 
-int softDecodePng(FILE *pngFile, IMAGE* png); 
+int softDecodePng(FILE *pngFile, IMAGE* png);
+
+int softDecodeTIFF(FILE *fp, IMAGE* im);
 
 int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size);
 
