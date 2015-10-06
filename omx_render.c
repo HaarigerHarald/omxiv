@@ -115,13 +115,16 @@ static int doRender(OMX_RENDER *render, IMAGE *image){
 	int retVal= OMX_RENDER_OK;
 	OMX_BUFFERHEADERTYPE *pBufHeader = render->pInputBufferHeader;
 	pBufHeader->nFilledLen=image->nData;
-	if(!render->renderAnimation)
-		pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;	
+	pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;	
 	
 	int ret = OMX_EmptyThisBuffer(render->handle, pBufHeader);
 	if (ret != OMX_ErrorNone) {
 		 retVal |= OMX_RENDER_ERROR_MEMORY;
 	}
+	
+	ilclient_wait_for_event(render->component, OMX_EventBufferFlag, render->inPort, 
+		0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, TIMEOUT_MS);
+	
 	return retVal;
 }
 
