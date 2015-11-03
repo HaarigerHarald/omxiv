@@ -8,6 +8,7 @@
 #include <termios.h>
 #include <signal.h>
 #include <dirent.h>
+#include <getopt.h>
 
 #include "omx_render.h"
 #include "omx_image.h"
@@ -25,8 +26,31 @@ static const char magNumGif[] = {0x47, 0x49, 0x46, 0x38};
 static const char magNumTifLE[] = {0x49, 0x49, 0x2a, 0x00};
 static const char magNumTifBE[] = {0x4d, 0x4d, 0x00, 0x2a};
 
+static const struct option longOpts[] = {
+	{"help", no_argument, 0, 'h'},
+	{"version", no_argument, 0, 'v'},
+	{"blank", no_argument, 0, 'b'},
+	{"transition", required_argument, 0, 'T'},
+	{"duration", required_argument, 0, 0x101},
+	{"yuv420", no_argument, 0, 'y'},
+	{"win", required_argument, 0, 0x102},
+	{"fill", no_argument, 0, 'f'},
+	{"no-aspect", no_argument, 0, 'a'},
+	{"orientation", required_argument, 0, 'o'},
+	{"mirror", no_argument, 0, 'm'},
+	{"layer", required_argument, 0, 'l'},
+	{"display", required_argument, 0, 'd'},
+	{"info", no_argument, 0, 'i'},
+	{"no-keys", no_argument, 0, 'k'},
+	{"soft", no_argument, 0, 's'},
+	{0, 0, 0, 0}
+};
+
 static ILCLIENT_T *client=NULL;
-static char end=0;
+static char end = 0;
+
+static char info = 0, blank = 0, soft = 0, keys = 1;
+static char color = COLOR_SPACE_RGBA;
 
 static void resetTerm(){
 	struct termios old = {0};
@@ -85,7 +109,7 @@ static int imageFilter(const struct dirent *entry){
 		return 0;
 }
 
-static int getImageFilesInDir(char ***list, char* path){
+static int getImageFilesInDir(char ***list, const char* path){
 	struct dirent **namelist;
 	int imageNum;
 	imageNum = scandir(path, &namelist, imageFilter, alphasort);
@@ -155,7 +179,7 @@ void printUsage(const char *progr){
 }
 
 // http://stackoverflow.com/a/912796
-static char getch(int timeout) {
+static char getch(const int timeout) {
 	char buf = 0;
 	struct termios old = {0};
 	if (tcgetattr(0, &old) < 0)
@@ -194,8 +218,8 @@ static int renderImage(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf,
 	return ret;
 }
 
-static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info, 
-			char color, OMX_RENDER_DISP_CONF *dispConfig, char soft){
+static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim, 
+		OMX_RENDER_DISP_CONF *dispConfig){
 	int ret = 0;
 	FILE *imageFile;
 	unsigned char *httpImMem = NULL;
@@ -295,7 +319,7 @@ static int decodeImage(char *filePath, IMAGE *image, ANIM_IMAGE *anim, char info
 
 /* From: https://github.com/popcornmix/omxplayer/blob/master/omxplayer.cpp#L455
  * Licensed under the GPLv2 */
-static void blankBackground(int imageLayer, int displayNum) {
+static void blankBackground(const int imageLayer, const int displayNum){
 	// we create a 1x1 black pixel image that is added to display just behind video
 	DISPMANX_DISPLAY_HANDLE_T display;
 	DISPMANX_UPDATE_HANDLE_T update;
@@ -344,12 +368,9 @@ static void printVersion(){
 }
 
 int main(int argc, char *argv[]){
-
-	int ret=1;
-	long timeout=0;
-	char info=0, blank=0, soft=0, keys=1;
-	int initRotation=0;
-	char color = COLOR_SPACE_RGBA;
+	int ret = 1;
+	long timeout = 0;
+	int initRotation = 0;
 
 	OMX_RENDER_DISP_CONF dispConfig = INIT_OMX_DISP_CONF;
 	OMX_RENDER_TRANSITION transition;
@@ -359,142 +380,86 @@ int main(int argc, char *argv[]){
 	if(isBackgroundProc()){
 		keys=0;
 	}
-
-	int i;
-	for(i=1; i<argc; i++){
-		if(argv[i][0]=='-'){
-			if(strcmp(argv[i], "--help") == 0){
+	
+	int opt;
+	while((opt = getopt_long(argc, argv, "hvt:bT:yfao:ml:d:iks", 
+			longOpts, NULL)) != -1){
+		
+		switch(opt){
+			case 'h':
 				printUsage(argv[0]);
 				return 0;
-			}else if(strcmp(argv[i], "--version") == 0){
+			case 'v':
 				printVersion();
 				return 0;
-			}else if(strcmp(argv[i], "--blank") == 0){
-				blank=1;
-			}else if(strcmp(argv[i], "--fill") == 0){
-				dispConfig.mode = OMX_DISPLAY_MODE_FILL;
-			}else if(strcmp(argv[i], "--no-aspect") == 0){
-				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
-			}else if(strcmp(argv[i], "--yuv420") == 0){
-				color = COLOR_SPACE_YUV420P;
-			}else if(strcmp(argv[i], "--no-keys") == 0){
-				keys=0;
-			}else if(strcmp(argv[i], "--mirror") == 0){
-				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
-			}else if(strcmp(argv[i], "--info") == 0){
-				info=1;
-			}else if(strcmp(argv[i], "--orientation") == 0){
-				if(argc > i+1){
-					dispConfig.rotation = strtol(argv[++i], NULL, 10);
-					initRotation = dispConfig.rotation;
-				}else{
-					printUsage(argv[0]);
-					return 1;
-				}
-			}else if(strcmp(argv[i], "--layer") == 0){
-				if(argc > i+1){
-					dispConfig.layer = strtol(argv[++i], NULL, 10);
-				}else{
-					printUsage(argv[0]);
-					return 1;
-				}
-			}else if(strcmp(argv[i], "--display") == 0){
-				if(argc > i+1){
-					dispConfig.display = strtol(argv[++i], NULL, 10);
-				}else{
-					printUsage(argv[0]);
-					return 1;
-				}
-			}else if(strcmp(argv[i], "--transition") == 0){
-				if(argc > i+1){
-					char* trans = argv[++i];
-					if(strcmp(trans, "blend") == 0)
-						transition.type = BLEND;
-				}else{
-					printUsage(argv[0]);
-					return 1;
-				}
-			}else if(strcmp(argv[i], "--duration") == 0){
-				if(argc > i+1){
-					transition.durationMs = strtol(argv[++i], NULL, 10);
-				}else{
-					printUsage(argv[0]);
-					return 1;
-				}
-			}else if(strcmp(argv[i], "--win") == 0){
-				if(argc > i+1){
-					char *pos = strtok (argv[++i],", '");
-					dispConfig.xOffset = strtol(pos, NULL, 10);
+			case 't':
+				timeout = strtol(optarg, NULL, 10)*1000;
+				break;
+			case 'b':
+				blank = 1; break;
+			case 'T':
+				if(strcmp(optarg, "blend") == 0)
+					transition.type = BLEND;
+				break;
+			case 0x101:
+				transition.durationMs = strtol(optarg, NULL, 10);
+				break;
+			case 'y':
+				color = COLOR_SPACE_YUV420P; break;
+			case 0x102:;
+				char *pos = strtok(optarg ,", '");
+				dispConfig.xOffset = strtol(pos, NULL, 10);
+				pos = strtok (NULL,", ");
+				if(pos!=NULL){
+					dispConfig.yOffset = strtol(pos, NULL, 10);
 					pos = strtok (NULL,", ");
-					if(pos!=NULL){
-						dispConfig.yOffset = strtol(pos, NULL, 10);
-						pos = strtok (NULL,", ");
-						dispConfig.width = strtol(pos, NULL, 10) - dispConfig.xOffset;
-						pos = strtok (NULL,", '");
-						dispConfig.height =  strtol(pos, NULL, 10) - dispConfig.yOffset;
-					}
+					dispConfig.width = strtol(pos, NULL, 10) - dispConfig.xOffset;
+					pos = strtok (NULL,", '");
+					dispConfig.height =  strtol(pos, NULL, 10) - dispConfig.yOffset;
 				}
-			}else if(strcmp(argv[i], "--soft") == 0){
-				soft=1;
-			}else{
-				if(strstr(argv[i], "h") != NULL ){
-					printUsage(argv[0]);
-					return 0;
-				}
-				if(strstr(argv[i], "v") != NULL ){
-					printVersion();
-					return 0;
-				}
-				if(strstr(argv[i], "b") != NULL)
-					blank = 1;
-				if(strstr(argv[i], "f") != NULL)
-					dispConfig.mode = OMX_DISPLAY_MODE_FILL;
-				if(strstr(argv[i], "i") != NULL)
-					info = 1;
-				if(strstr(argv[i], "a") != NULL)
-					dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
-				if(strstr(argv[i], "m") != NULL)
-					dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
-				if(strstr(argv[i], "y") != NULL)
-					color = COLOR_SPACE_YUV420P;
-				if(strstr(argv[i], "s") != NULL)
-					soft=1;
-				if(strstr(argv[i], "k") != NULL)
-					keys=0;
-				if(strstr(argv[i], "T") != NULL && argc > i+1){
-					char* trans = argv[++i];
-					if(strcmp(trans, "blend") == 0)
-						transition.type = BLEND;
-					continue;
-				}if(strstr(argv[i], "t") != NULL && argc > i+1)
-					timeout = strtol(argv[++i], NULL, 10)*1000;
-				if(strstr(argv[i], "l") != NULL && argc > i+1)
-					dispConfig.layer = strtol(argv[++i], NULL, 10);
-				if(strstr(argv[i], "d") != NULL && argc > i+1)
-					dispConfig.display = strtol(argv[++i], NULL, 10);
-				if(strstr(argv[i], "o") != NULL && argc > i+1){
-					dispConfig.rotation = strtol(argv[++i], NULL, 10);
-					initRotation = dispConfig.rotation;
-				}
-			}
-		}else{
-			break;
+				break;
+			case 'f':
+				dispConfig.mode = OMX_DISPLAY_MODE_FILL; break;
+			case 'a':
+				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
+				break;
+			case 'o':
+				initRotation = strtol(optarg, NULL, 10);
+				dispConfig.rotation = initRotation;
+				break;
+			case 'm':
+				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
+				break;
+			case 'l':
+				dispConfig.layer = strtol(optarg, NULL, 10);
+				break;
+			case 'd':
+				dispConfig.display = strtol(optarg, NULL, 10);
+				break;
+			case 'i':
+				info = 1; break;
+			case 'k':
+				keys = 0; break;
+			case 's':
+				soft = 1; break;
+			default:
+				return EXIT_FAILURE;	
 		}
 	}
 
 	int imageNum;
 	char **files;
-	if(argc-i <= 0){
+	if(argc-optind <= 0){
 		imageNum=getImageFilesInDir(&files, "./");
-	}else if(isDir(argv[i])){
-		imageNum=getImageFilesInDir(&files, argv[i]);
+	}else if(isDir(argv[optind])){
+		imageNum=getImageFilesInDir(&files, argv[optind]);
 	}else{
-		imageNum = argc-i;
+		imageNum = argc-optind;
 
 		files=malloc(sizeof(char*) *imageNum);
 		int x;
-		for(x =0 ; i+x<argc; x++){
-			files[x]=argv[i+x];
+		for(x =0; optind+x<argc; x++){
+			files[x]=argv[optind+x];
 		}
 	}
 
@@ -523,7 +488,7 @@ int main(int argc, char *argv[]){
 	IMAGE image = {0};
 	ANIM_IMAGE anim = {0};
 	
-	ret=decodeImage(files[0], &image, &anim, info, color, &dispConfig, soft);
+	ret=decodeImage(files[0], &image, &anim, &dispConfig);
 
 	if(ret==0){
 		if(blank)
@@ -543,8 +508,8 @@ int main(int argc, char *argv[]){
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
 
-	i=0;
-	char c=0, paused=0;
+	int i = 0;
+	char c = 0, paused = 0;
 	while(!end){
 		if(keys){
 			c = getch(1);
@@ -558,9 +523,9 @@ int main(int argc, char *argv[]){
 			if( (cTime-lShowTime) > timeout){
 				if(imageNum <= ++i)
 					i=0;
-				dispConfig.rotation= initRotation;
+				dispConfig.rotation = initRotation;
 				stopAnimation(&render);
-				ret=decodeImage(files[i], &image, &anim, info, color, &dispConfig, soft);
+				ret=decodeImage(files[i], &image, &anim, &dispConfig);
 				if(ret==0){
 					lShowTime = getCurrentTimeMs();
 					if(renderImage(&render, &dispConfig, &image, &anim, &transition) != 0)
@@ -610,7 +575,7 @@ int main(int argc, char *argv[]){
 					i=0;
 				dispConfig.rotation= initRotation;
 				stopAnimation(&render);
-				ret=decodeImage(files[i], &image, &anim, info, color, &dispConfig, soft);
+				ret=decodeImage(files[i], &image, &anim, &dispConfig);
 				if(ret==0){
 					lShowTime = getCurrentTimeMs();
 					if(renderImage(&render, &dispConfig, &image, &anim, &transition) != 0)
@@ -621,7 +586,7 @@ int main(int argc, char *argv[]){
 					i=imageNum-1;
 				dispConfig.rotation= initRotation;
 				stopAnimation(&render);
-				ret=decodeImage(files[i], &image, &anim, info, color, &dispConfig, soft);
+				ret=decodeImage(files[i], &image, &anim, &dispConfig);
 				if(ret==0){
 					lShowTime = getCurrentTimeMs();
 					if(renderImage(&render, &dispConfig, &image, &anim, &transition) != 0)
