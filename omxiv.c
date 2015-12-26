@@ -471,12 +471,12 @@ int main(int argc, char *argv[]){
 	bcm_host_init();
 
 	if ((client = ilclient_init()) == NULL) {
-		perror("Error init ilclient\n");
+		fprintf(stderr, "Error init ilclient\n");
 		return 1;
 	}
 
 	if (OMX_Init() != OMX_ErrorNone) {
-		perror("Error init omx\n");
+		fprintf(stderr, "Error init omx. There may be not enough gpu memory.\n");
 		ilclient_destroy(client);
 		return 1;
 	}
