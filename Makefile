@@ -1,6 +1,6 @@
 OBJS=omxiv.o omx_image.o omx_render.o soft_image.o ./libnsbmp/libnsbmp.o ./libnsgif/libnsgif.o
 BIN=omxiv.bin
-LDFLAGS+=-lilclient -ljpeg -lpng -lrt -ldl -Wl,--gc-sections -ltiff
+LDFLAGS+=-lilclient -ljpeg -lpng -lrt -ldl -Wl,--gc-sections
 INCLUDES+=-I./libnsbmp -I./libnsgif -I./libs/ilclient
 
 BUILDVERSION=\"$(shell git rev-parse --short=10 HEAD 2>/dev/null;test $$? -gt 0 && echo UNKNOWN)\"

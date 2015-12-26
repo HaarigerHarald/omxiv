@@ -4,8 +4,8 @@ A GPU accelerated image viewer for the Raspberry Pi.
 
 ## Building
 
-You will need the development header for libjpeg, libpng and libtiff
-(Debian: libjpeg8-dev, libpng12-dev, libtiff4-dev). Then build it on the Pi with:
+You will need the development header for libjpeg and libpng
+(Debian: libjpeg8-dev, libpng12-dev). Then build it on the Pi with:
 
     make ilclient
     make

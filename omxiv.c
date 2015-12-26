@@ -611,6 +611,7 @@ int main(int argc, char *argv[]){
 
 	free(image.pData);
 	unloadLibCurl();
+	unloadLibTiff();
 
 	if(keys)
 		resetTerm();

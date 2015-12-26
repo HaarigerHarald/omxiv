@@ -28,10 +28,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dlfcn.h>
 
 #include <jpeglib.h>
 #include <png.h>
-#include <tiffio.h>
 
 #include "soft_image.h"
 #include "libnsbmp/libnsbmp.h"
@@ -517,11 +517,13 @@ cleanup:
 	return ret;
 }
 
-static tsize_t tiffRead(thandle_t st, tdata_t buffer, tsize_t size){
+// TIFF
+
+static int32_t tiffRead(void* st, void* buffer, int32_t size){
 	return fread(buffer, 1, size, (FILE*)st);
 }
 
-static toff_t tiffSeek(thandle_t st, toff_t pos, int whence){
+static uint32_t tiffSeek32(void* st, uint32_t pos, int whence){
 	int ret = fseek((FILE*)st, pos, whence);
 	if(ret == 0)
 		return pos;
@@ -529,26 +531,95 @@ static toff_t tiffSeek(thandle_t st, toff_t pos, int whence){
 		return -1;
 }
 
-static tsize_t dummyTiffWrite(thandle_t st,tdata_t buffer,tsize_t size){return 0;}
-static int dummyTiffClose(thandle_t st){return 0;}
-static toff_t dummyTiffSize(thandle_t st){return 0;}
-static int dummyTiffMap(thandle_t st, tdata_t* addr, toff_t* size){return 0;}
-static void dummyTiffUnmap(thandle_t st, tdata_t addr, toff_t size){}
+static uint64_t tiffSeek64(void* st, uint64_t pos, int whence){
+	int ret = fseek((FILE*)st, pos, whence);
+	if(ret == 0)
+		return pos;
+	else
+		return -1;
+}
+
+static int32_t dummyTiffWrite(void* st, void* buffer, int32_t size){return 0;}
+static int dummyTiffClose(void* st){return 0;}
+static uint32_t dummyTiffSize(void* st){return 0;}
+static int dummyTiffMap(void* st, void** addr, uint32_t* size){return 0;}
+static void dummyTiffUnmap(void* st, void* addr, uint32_t size){}
+
+static void *libTiffHandle = NULL;
+static int libTiffVersion = 5;
+static void* (*TIFFClientOpen)(const char*, const char*, void*,
+	    void*, void*, void*, void*, void*, void*, void*);
+static int (*TIFFGetField)(void*, uint32_t, ...);
+static int (*TIFFReadRGBAImageOriented)(void*, uint32_t, uint32_t, uint32_t*, int, int);
+static void (*TIFFClose)(void*);
+
+void unloadLibTiff(){
+	if(libTiffHandle)
+		dlclose(libTiffHandle);
+	libTiffHandle = NULL;
+}
+
+static int loadLibTiff(){
+	char *error= NULL;
+	if(libTiffHandle == NULL){
+		
+		libTiffHandle = dlopen("libtiff.so.5", RTLD_LAZY);
+		if (!libTiffHandle){
+			libTiffHandle = dlopen("libtiff.so.4", RTLD_LAZY);
+			if (!libTiffHandle){
+				goto error;
+			}
+			libTiffVersion = 4;
+		}
+
+		TIFFClientOpen = dlsym(libTiffHandle, "TIFFClientOpen");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		TIFFGetField = dlsym(libTiffHandle, "TIFFGetField");
+		if ((error = dlerror()) != NULL)  
+			goto error;
+		
+		TIFFReadRGBAImageOriented = dlsym(libTiffHandle, "TIFFReadRGBAImageOriented");
+		if ((error = dlerror()) != NULL)  
+			goto error;	
+		
+		TIFFClose = dlsym(libTiffHandle, "TIFFClose");
+		if ((error = dlerror()) != NULL)  
+			goto error;	
+		
+	}
+	return 0;
+error:
+	fprintf(stderr, "%s\n", error);
+	unloadLibTiff();
+	return 1;
+}
 
 int softDecodeTIFF(FILE *fp, IMAGE* im){
 	int ret = SOFT_IMAGE_OK;
-	TIFF* tif = TIFFClientOpen("FILE", "r", (thandle_t)fp,
-		tiffRead, dummyTiffWrite, tiffSeek, dummyTiffClose, 
-		dummyTiffSize, dummyTiffMap, dummyTiffUnmap);
+	
+	if(loadLibTiff() == 1)
+		return SOFT_IMAGE_ERROR_INIT;
+	
+	void* tif;
+	if(libTiffVersion == 5)
+		tif = TIFFClientOpen("FILE", "r", (void *)fp,
+			tiffRead, dummyTiffWrite, tiffSeek64, dummyTiffClose, 
+			dummyTiffSize, dummyTiffMap, dummyTiffUnmap);
+	else
+		tif = TIFFClientOpen("FILE", "r", (void *)fp,
+			tiffRead, dummyTiffWrite, tiffSeek32, dummyTiffClose, 
+			dummyTiffSize, dummyTiffMap, dummyTiffUnmap);
 	if(tif != NULL){
-		TIFFGetField(tif, TIFFTAG_IMAGEWIDTH,(uint32*) &im->width);
-		TIFFGetField(tif, TIFFTAG_IMAGELENGTH,(uint32*) &im->height);
+		TIFFGetField(tif, /* TIFFTAG_IMAGEWIDTH */ 256,(uint32_t*) &im->width);
+		TIFFGetField(tif, /* TIFFTAG_IMAGELENGTH */ 257,(uint32_t*) &im->height);
 		unsigned int stride = ALIGN16(im->width)*4;
 		im->nData = stride*ALIGN16(im->height);
 		im->pData = malloc(im->nData);
 		if (im->pData != NULL){
-			if (TIFFReadRGBAImageOriented(tif, im->width, im->height,(uint32*) im->pData, 
-					ORIENTATION_TOPLEFT, 0)){
+			if (TIFFReadRGBAImageOriented(tif, im->width, im->height,(uint32_t*) im->pData, 
+					/* ORIENTATION_TOPLEFT */ 1, 0)){
 				unsigned int pixWidth = im->width*4;
 				unsigned int i;
 				for(i=im->height-1;i>0; i--){
@@ -573,9 +644,7 @@ int softDecodeTIFF(FILE *fp, IMAGE* im){
  * Distributed under: http://curl.haxx.se/docs/copyright.html
 **/
 
-#include <dlfcn.h>
-
-static void *libHandle = NULL;
+static void *libcurlHandle = NULL;
 static void (*curl_global_init)(int);
 static void* (*curl_easy_init)(void);
 static void (*curl_easy_setopt)(void*, int, ...);
@@ -584,64 +653,61 @@ static void (*curl_easy_cleanup)(void*);
 static void (*curl_global_cleanup)(void);
 
 void unloadLibCurl(){
-	if(libHandle)
-		dlclose(libHandle);
-	libHandle = NULL;
+	if(libcurlHandle)
+		dlclose(libcurlHandle);
+	libcurlHandle = NULL;
 }
 
 static int loadLibCurl(){
-	if(libHandle == NULL){
-		char *error= NULL;
+	char *error= NULL;
+	if(libcurlHandle == NULL){
 		
 #ifdef LCURL_NAME
 		if(strcmp(LCURL_NAME, "") != 0)
-			libHandle = dlopen(LCURL_NAME, RTLD_LAZY);
+			libcurlHandle = dlopen(LCURL_NAME, RTLD_LAZY);
 #endif
-		if(!libHandle)
-			libHandle = dlopen("libcurl.so.4", RTLD_LAZY);
-		if (!libHandle){
-			libHandle = dlopen("libcurl.so", RTLD_LAZY);
+		if(!libcurlHandle)
+			libcurlHandle = dlopen("libcurl.so.4", RTLD_LAZY);
+		if (!libcurlHandle){
+			libcurlHandle = dlopen("libcurl.so", RTLD_LAZY);
 		
-			if (!libHandle){
-				libHandle = dlopen("libcurl.so.3", RTLD_LAZY);
+			if (!libcurlHandle){
+				libcurlHandle = dlopen("libcurl.so.3", RTLD_LAZY);
 			
-				if (!libHandle)
+				if (!libcurlHandle)
 					goto error;
 			}
 		}
 
-		curl_global_init = dlsym(libHandle, "curl_global_init");
+		curl_global_init = dlsym(libcurlHandle, "curl_global_init");
 		if ((error = dlerror()) != NULL)  
 			goto error;
 		
-		curl_easy_init = dlsym(libHandle, "curl_easy_init");
+		curl_easy_init = dlsym(libcurlHandle, "curl_easy_init");
 		if ((error = dlerror()) != NULL)  
 			goto error;
 		
-		curl_easy_setopt = dlsym(libHandle, "curl_easy_setopt");
+		curl_easy_setopt = dlsym(libcurlHandle, "curl_easy_setopt");
 		if ((error = dlerror()) != NULL)  
 			goto error;
 		
-		curl_easy_perform = dlsym(libHandle, "curl_easy_perform");
+		curl_easy_perform = dlsym(libcurlHandle, "curl_easy_perform");
 		if ((error = dlerror()) != NULL)  
 			goto error;
 		
-		curl_easy_cleanup = dlsym(libHandle, "curl_easy_cleanup");
+		curl_easy_cleanup = dlsym(libcurlHandle, "curl_easy_cleanup");
 		if ((error = dlerror()) != NULL)  
 			goto error;
 		
-		curl_global_cleanup = dlsym(libHandle, "curl_global_cleanup");
+		curl_global_cleanup = dlsym(libcurlHandle, "curl_global_cleanup");
 		if ((error = dlerror()) != NULL)  
-			goto error;
-		
-		return 0;
-		
+			goto error;			
+	}
+	return 0;
 error:
 	fprintf(stderr, "%s\n", error);
 	unloadLibCurl();
 	return 1;
-	}
-	return 0;
 }
 
 struct MemoryStruct {

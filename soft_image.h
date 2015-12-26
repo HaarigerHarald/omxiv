@@ -55,6 +55,7 @@ int softDecodeJpeg(FILE *jpegFile, IMAGE *jpeg);
 int softDecodePng(FILE *pngFile, IMAGE* png);
 
 int softDecodeTIFF(FILE *fp, IMAGE* im);
+void unloadLibTiff();
 
 int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size);
 
