@@ -32,7 +32,6 @@ static const struct option longOpts[] = {
 	{"blank", no_argument, 0, 'b'},
 	{"transition", required_argument, 0, 'T'},
 	{"duration", required_argument, 0, 0x101},
-	{"yuv420", no_argument, 0, 'y'},
 	{"win", required_argument, 0, 0x102},
 	{"aspect", required_argument, 0, 'a'},
 	{"orientation", required_argument, 0, 'o'},
@@ -147,7 +146,7 @@ void printUsage(const char *progr){
 	printf("Usage: %s [OPTIONS] image1 [image2] ...\n", progr);
 	printf("       %s [OPTIONS] directory\n\n", progr);
 	printf("Without any input it will cycle through all\n");
-	printf("supported images in the current folder.\n\n");
+	printf("supported images in the current directory.\n\n");
 	printf("OPTIONS:\n\n");
 	printf("    -h  --help                  Print this help\n");
 	printf("    -v  --version               Show version info\n");
@@ -155,7 +154,6 @@ void printUsage(const char *progr){
 	printf("    -b  --blank                 Set background to black\n");
 	printf("    -T  --transition   type     type: none(default), blend\n");
 	printf("        --duration      n       Transition duration in ms\n");
-	printf("    -y  --yuv420                Use YUV420 for rendering instead of RGBA\n");
 	printf("        --win 'x1 y1 x2 y2'     Position of image window\n");
 	printf("        --win x1,y1,x2,y2       Position of image window\n");
 	printf("    -m  --mirror                Mirror image\n");
@@ -389,7 +387,7 @@ int main(int argc, char *argv[]){
 	}
 	
 	int opt;
-	while((opt = getopt_long(argc, argv, "hvt:bT:ya:o:ml:d:iks", 
+	while((opt = getopt_long(argc, argv, "hvt:bT:a:o:ml:d:iks", 
 			longOpts, NULL)) != -1){
 		
 		switch(opt){
@@ -411,8 +409,6 @@ int main(int argc, char *argv[]){
 			case 0x101:
 				transition.durationMs = strtol(optarg, NULL, 10);
 				break;
-			case 'y':
-				color = COLOR_SPACE_YUV420P; break;
 			case 0x102:;
 				char *pos = strtok(optarg ,", '");
 				dispConfig.xOffset = strtol(pos, NULL, 10);
