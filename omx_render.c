@@ -144,10 +144,34 @@ int setOmxDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf){
 	if(dispConf->width != 0 && dispConf->height != 0){
 		set|= OMX_DISPLAY_SET_DEST_RECT;
 		if(dispConf->configFlags & OMX_DISP_CONFIG_FLAG_CENTER){
-			dispConfRT.dest_rect.width = dispConf->cImageWidth;
-			dispConfRT.dest_rect.height = dispConf->cImageHeight;
-			dispConfRT.dest_rect.x_offset = dispConf->xOffset + (dispConf->width - dispConf->cImageWidth)/2;
-			dispConfRT.dest_rect.y_offset = dispConf->yOffset + (dispConf->height - dispConf->cImageHeight)/2;
+			if(dispConf->rotation == 90 || dispConf->rotation == 270){
+				if(dispConf->cImageHeight > dispConf->width){
+					float shrink = (float) dispConf->width / dispConf->cImageHeight;
+					dispConfRT.dest_rect.width = dispConf->width;
+					dispConfRT.dest_rect.height = dispConf->cImageWidth*shrink;
+				}else if(dispConf->cImageWidth > dispConf->height){
+					float shrink = (float) dispConf->height / dispConf->cImageWidth;
+					dispConfRT.dest_rect.height = dispConf->height;
+					dispConfRT.dest_rect.width = dispConf->cImageHeight*shrink;
+				}else{
+					dispConfRT.dest_rect.width = dispConf->cImageHeight;
+					dispConfRT.dest_rect.height = dispConf->cImageWidth;
+				}
+				
+				dispConfRT.dest_rect.x_offset = dispConf->xOffset + 
+					(dispConf->width - dispConf->cImageHeight)/2;
+				dispConfRT.dest_rect.y_offset = dispConf->yOffset + 
+					(dispConf->height - dispConf->cImageWidth)/2;
+			}else{
+				dispConfRT.dest_rect.width = dispConf->cImageWidth;
+				dispConfRT.dest_rect.height = dispConf->cImageHeight;
+			}
+			
+			dispConfRT.dest_rect.x_offset = dispConf->xOffset + 
+				(dispConf->width - dispConfRT.dest_rect.width)/2;
+			dispConfRT.dest_rect.y_offset = dispConf->yOffset + 
+				(dispConf->height - dispConfRT.dest_rect.height)/2;
+			
 		}else{
 			dispConfRT.dest_rect.x_offset = dispConf->xOffset;
 			dispConfRT.dest_rect.y_offset = dispConf->yOffset;
