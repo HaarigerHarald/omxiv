@@ -34,8 +34,7 @@ static const struct option longOpts[] = {
 	{"duration", required_argument, 0, 0x101},
 	{"yuv420", no_argument, 0, 'y'},
 	{"win", required_argument, 0, 0x102},
-	{"fill", no_argument, 0, 'f'},
-	{"no-aspect", no_argument, 0, 'a'},
+	{"aspect", required_argument, 0, 'a'},
 	{"orientation", required_argument, 0, 'o'},
 	{"mirror", no_argument, 0, 'm'},
 	{"layer", required_argument, 0, 'l'},
@@ -49,8 +48,9 @@ static const struct option longOpts[] = {
 static ILCLIENT_T *client=NULL;
 static char end = 0;
 
-static char info = 0, blank = 0, soft = 0, keys = 1;
+static char info = 0, blank = 0, soft = 0, keys = 1, center = 0;
 static char color = COLOR_SPACE_RGBA;
+static uint32_t sWidth, sHeight;
 
 static void resetTerm(){
 	struct termios old = {0};
@@ -153,15 +153,14 @@ void printUsage(const char *progr){
 	printf("    -v  --version               Show version info\n");
 	printf("    -t                  n       Time in s between 2 images in a slide show\n");
 	printf("    -b  --blank                 Set background to black\n");
-	printf("    -T  --transition   Type     Type: none(default), blend\n");
+	printf("    -T  --transition   type     type: none(default), blend\n");
 	printf("        --duration      n       Transition duration in ms\n");
 	printf("    -y  --yuv420                Use YUV420 for rendering instead of RGBA\n");
 	printf("        --win 'x1 y1 x2 y2'     Position of image window\n");
 	printf("        --win x1,y1,x2,y2       Position of image window\n");
-	printf("    -f  --fill                  Use the whole screen for the image\n");
-	printf("    -a  --no-aspect             Don't keep aspect ratio when used with --win\n");
-	printf("    -o  --orientation   n       Orientation of the image (0, 90, 180, 270)\n");
 	printf("    -m  --mirror                Mirror image\n");
+	printf("    -a  --aspect       type     type: letterbox(default), fill, center\n");
+	printf("    -o  --orientation   n       Orientation of the image (0, 90, 180, 270)\n");
 	printf("    -l  --layer         n       Render layer number\n");
 	printf("    -d  --display       n       Display number\n");
 	printf("    -i  --info                  Print some additional infos\n");
@@ -198,6 +197,9 @@ static char getch(const int timeout) {
 static int renderImage(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf, 
 		IMAGE *image, ANIM_IMAGE *anim, OMX_RENDER_TRANSITION *transition){
 	int ret;
+	
+	dispConf->cImageWidth = image->width;
+	dispConf->cImageHeight = image->height;
 	
 	if(render->component){
 		ret = stopOmxImageRender(render);
@@ -300,8 +302,13 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim,
 	if(ret == 0 && anim->frameCount < 2){		
 		IMAGE image2;
 		image2.colorSpace = color;
-		image2.height = dispConfig->height;
-		image2.width = dispConfig->width;
+		if(center && sHeight > image->height && sWidth > image->width){
+			image2.height = image->height;
+			image2.width = image->width;
+		}else{
+			image2.height = dispConfig->height;
+			image2.width = dispConfig->width;
+		}
 			
 		ret = omxAutoResize(client, image, &image2, dispConfig->display, dispConfig->rotation, 
 				dispConfig->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT);
@@ -382,7 +389,7 @@ int main(int argc, char *argv[]){
 	}
 	
 	int opt;
-	while((opt = getopt_long(argc, argv, "hvt:bT:yfao:ml:d:iks", 
+	while((opt = getopt_long(argc, argv, "hvt:bT:ya:o:ml:d:iks", 
 			longOpts, NULL)) != -1){
 		
 		switch(opt){
@@ -418,10 +425,13 @@ int main(int argc, char *argv[]){
 					dispConfig.height =  strtol(pos, NULL, 10) - dispConfig.yOffset;
 				}
 				break;
-			case 'f':
-				dispConfig.mode = OMX_DISPLAY_MODE_FILL; break;
 			case 'a':
-				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
+				if(strcmp(optarg, "fill") == 0)
+					dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_NO_ASPECT;
+				else if(strcmp(optarg, "center") == 0){
+					center = 1;
+					dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_CENTER;
+				}
 				break;
 			case 'o':
 				initRotation = strtol(optarg, NULL, 10);
@@ -479,6 +489,17 @@ int main(int argc, char *argv[]){
 		fprintf(stderr, "Error init omx. There may be not enough gpu memory.\n");
 		ilclient_destroy(client);
 		return 1;
+	}
+	
+	if(center){
+		if(dispConfig.width == 0 || dispConfig.height == 0){
+			graphics_get_display_size(dispConfig.display, &sWidth, &sHeight);
+			dispConfig.width = sWidth;
+			dispConfig.height = sHeight;
+		}else{
+			sWidth = dispConfig.width;
+			sHeight = dispConfig.height;
+		}
 	}
 
 	OMX_RENDER render = INIT_OMX_RENDER;

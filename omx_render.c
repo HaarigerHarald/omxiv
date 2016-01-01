@@ -143,10 +143,17 @@ int setOmxDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf){
 
 	if(dispConf->width != 0 && dispConf->height != 0){
 		set|= OMX_DISPLAY_SET_DEST_RECT;
-		dispConfRT.dest_rect.x_offset = dispConf->xOffset;
-		dispConfRT.dest_rect.y_offset = dispConf->yOffset;
-		dispConfRT.dest_rect.width = dispConf->width;
-		dispConfRT.dest_rect.height = dispConf->height;
+		if(dispConf->configFlags & OMX_DISP_CONFIG_FLAG_CENTER){
+			dispConfRT.dest_rect.width = dispConf->cImageWidth;
+			dispConfRT.dest_rect.height = dispConf->cImageHeight;
+			dispConfRT.dest_rect.x_offset = dispConf->xOffset + (dispConf->width - dispConf->cImageWidth)/2;
+			dispConfRT.dest_rect.y_offset = dispConf->yOffset + (dispConf->height - dispConf->cImageHeight)/2;
+		}else{
+			dispConfRT.dest_rect.x_offset = dispConf->xOffset;
+			dispConfRT.dest_rect.y_offset = dispConf->yOffset;
+			dispConfRT.dest_rect.width = dispConf->width;
+			dispConfRT.dest_rect.height = dispConf->height;
+		}
 		dispConfRT.fullscreen = OMX_FALSE;
 	}else{
 		dispConfRT.fullscreen = OMX_TRUE;

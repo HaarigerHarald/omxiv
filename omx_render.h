@@ -43,8 +43,9 @@
 
 #define OMX_DISP_CONFIG_FLAG_NO_ASPECT 0x1
 #define OMX_DISP_CONFIG_FLAG_MIRROR 0x2
+#define OMX_DISP_CONFIG_FLAG_CENTER 0x4
 
-#define INIT_OMX_DISP_CONF {0, 0, 0, 0, 0, 0, 0, 0, OMX_DISPLAY_MODE_LETTERBOX, 0}
+#define INIT_OMX_DISP_CONF {0, 0, 0, 0, 0, 0, 0, 0, OMX_DISPLAY_MODE_LETTERBOX, 0, 0, 0}
 
 typedef struct OMX_RENDER_DISP_CONF{	
 	int xOffset; 
@@ -57,6 +58,9 @@ typedef struct OMX_RENDER_DISP_CONF{
 	int alpha;
 	int mode;
 	int configFlags;
+	
+	unsigned int cImageWidth;
+	unsigned int cImageHeight;
 	
 } OMX_RENDER_DISP_CONF;
 
