@@ -300,9 +300,22 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim,
 	if(ret == 0 && anim->frameCount < 2){		
 		IMAGE image2;
 		image2.colorSpace = color;
-		if(center && sHeight > image->height && sWidth > image->width){
-			image2.height = image->height;
-			image2.width = image->width;
+		if(center){
+			if((dispConfig->rotation == 90 || dispConfig->rotation == 270) &&
+				(image->width > sHeight|| image->height > sWidth)){
+					
+				image2.height = dispConfig->height;
+				image2.width = dispConfig->width;
+			} else if(image->height > sHeight && image->width > sWidth){
+				image2.height = dispConfig->height;
+				image2.width = dispConfig->width;
+			}else if(dispConfig->rotation == 90 || dispConfig->rotation == 270){
+				image2.height = image->width;
+				image2.width = image->height;
+			}else{
+				image2.height = image->height;
+				image2.width = image->width;
+			}
 		}else{
 			image2.height = dispConfig->height;
 			image2.width = dispConfig->width;
