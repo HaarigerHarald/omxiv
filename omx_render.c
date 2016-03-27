@@ -298,6 +298,14 @@ static void* doRenderAnimation(void* params){
 				
 				if(render->stop != 0)
 					goto end;
+				
+				int ret=OMX_FreeBuffer(render->handle, render->inPort, render->pInputBufferHeader);
+				if(ret!= OMX_ErrorNone)
+					goto end;
+				ret = OMX_UseBuffer(render->handle,&render->pInputBufferHeader,render->inPort, 
+					NULL, anim->curFrame->nData, (OMX_U8 *) anim->curFrame->pData);
+				if(ret!= OMX_ErrorNone)
+					goto end;
 			}
 		}
 	}else{
@@ -321,6 +329,14 @@ static void* doRenderAnimation(void* params){
 				pthread_mutex_unlock(&render->lock);
 				
 				if(render->stop != 0)
+					goto end;
+				
+				int ret=OMX_FreeBuffer(render->handle, render->inPort, render->pInputBufferHeader);
+				if(ret!= OMX_ErrorNone)
+					goto end;
+				ret = OMX_UseBuffer(render->handle,&render->pInputBufferHeader,render->inPort, 
+					NULL, anim->curFrame->nData, (OMX_U8 *) anim->curFrame->pData);
+				if(ret!= OMX_ErrorNone)
 					goto end;
 			}
 		}

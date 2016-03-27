@@ -196,9 +196,6 @@ static int renderImage(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf,
 		IMAGE *image, ANIM_IMAGE *anim, OMX_RENDER_TRANSITION *transition){
 	int ret;
 	
-	dispConf->cImageWidth = image->width;
-	dispConf->cImageHeight = image->height;
-	
 	if(render->component){
 		ret = stopOmxImageRender(render);
 		if(ret != 0){
@@ -207,9 +204,13 @@ static int renderImage(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf,
 		}
 	}
 	if(anim->frameCount < 2){
+		dispConf->cImageWidth = image->width;
+		dispConf->cImageHeight = image->height;
 		ret = omxRenderImage(render, image, dispConf, transition);
 		destroyImage(image);
 	}else{
+		dispConf->cImageWidth = anim->curFrame->width;
+		dispConf->cImageHeight = anim->curFrame->height;
 		ret = omxRenderAnimation(render, anim, dispConf, transition);
 	}
 	if(ret != 0){

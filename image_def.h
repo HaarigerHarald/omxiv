@@ -47,6 +47,8 @@ typedef struct IMAGE{
 
 typedef struct ANIM_IMAGE{
 	IMAGE *curFrame;
+	IMAGE *frames;
+	unsigned int decodeCount;
 	unsigned int frameNum;
 	
 	unsigned char* imData;

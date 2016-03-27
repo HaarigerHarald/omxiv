@@ -337,7 +337,7 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size){
 	
 	unsigned int pixWidth = bmpWidth*4;
 	unsigned int i;
-	for(i=bmpImage->height-1;i>0 ; i--){
+	for(i=bmpImage->height; --i > 0 ;){
 		memmove(bmpImage->pData + i* stride, 
 			bmpData +i* pixWidth, pixWidth);
 	}
@@ -368,8 +368,14 @@ static void gif_destroy(void *bitmap){
 void destroyAnimImage(ANIM_IMAGE *animIm){
 	gif_animation *gif = (gif_animation*) animIm->pExtraData;
 	gif_finalise(gif);
-	
-	if(animIm->curFrame){
+	if(animIm->frames){
+		unsigned int i;
+		for(i=0; i < animIm->frameCount; i++){
+			destroyImage(&animIm->frames[i]);
+		}
+		free(animIm->frames);
+		animIm->frames = NULL;
+	}else if(animIm->curFrame){
 		destroyImage(animIm->curFrame);
 	}
 	free(animIm->imData);
@@ -393,17 +399,25 @@ static int decodeNextGifFrame(ANIM_IMAGE *gifImage){
 	unsigned int stride = ALIGN16(gif->width)*4;
 	gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
 	
-	code = gif_decode_frame(gif, gifImage->frameNum);
-	if (code != GIF_OK){
-		ret = SOFT_IMAGE_ERROR_DECODING;
-		goto cleanup;
+	if(gifImage->frames){
+		gifImage->curFrame = &(gifImage->frames[gifImage->frameNum]);
 	}
-	
-	unsigned int pixWidth = gif->width*4;
-	unsigned int n, i, gifSize = pixWidth*gif->height;
-	for(n=0, i=0; n<gifSize; n+=pixWidth, i+=stride){
-		memcpy(gifImage->curFrame->pData + i, 
-			gif->frame_image +n, pixWidth);
+	if(gifImage->frames == NULL || gifImage->decodeCount < gifImage->frameCount){
+		code = gif_decode_frame(gif, gifImage->frameNum);
+		if (code != GIF_OK){
+			ret = SOFT_IMAGE_ERROR_DECODING;
+			goto cleanup;
+		}
+		
+		unsigned int pixWidth = gif->width*4;
+		unsigned int n, i, gifSize = pixWidth*gif->height;
+		for(n=0, i=0; n<gifSize; n+=pixWidth, i+=stride){
+			memcpy(gifImage->curFrame->pData + i, 
+				gif->frame_image +n, pixWidth);
+		}
+		
+		if(gifImage->frames)
+			gifImage->decodeCount++;
 	}
 	
 	return SOFT_IMAGE_OK;
@@ -476,16 +490,48 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, unsigned char** data, size_t s
 	
 	size_t nData = stride* ALIGN16(gif->height);
 	
-	gifImage->curFrame->pData = malloc(nData);
-	if(!gifImage->curFrame->pData){
-		ret = SOFT_IMAGE_ERROR_MEMORY;
-		goto cleanup;
+	unsigned int i = 0;
+	if(gifImage->frameCount > 1){
+		gifImage->frames = malloc(gifImage->frameCount * sizeof(IMAGE));
+		if(!gifImage->frames){
+			ret = SOFT_IMAGE_ERROR_MEMORY;
+			goto cleanup;
+		}
+		
+		for(; i<gifImage->frameCount; i++){
+			gifImage->frames[i].pData = malloc(nData);
+			gifImage->frames[i].nData = nData;
+			gifImage->frames[i].width = gif->width;
+			gifImage->frames[i].height = gif->height;
+			gifImage->frames[i].colorSpace = COLOR_SPACE_RGBA;
+			if(!gifImage->frames[i].pData){
+				break;
+			}
+		}
 	}
 	
-	gifImage->curFrame->nData = nData;
-	gifImage->curFrame->width = gif->width;
-	gifImage->curFrame->height = gif->height;
-	gifImage->curFrame->colorSpace = COLOR_SPACE_RGBA;
+	if(i < gifImage->frameCount){
+		if(gifImage->frames){
+			for(;i<gifImage->frameCount;i--){
+				if(gifImage->frames[i].pData)
+					destroyImage(&gifImage->frames[i]);
+			}
+			free(gifImage->frames);
+			gifImage->frames = NULL;
+		}
+		gifImage->curFrame->pData = malloc(nData);
+		if(!gifImage->curFrame->pData){
+			ret = SOFT_IMAGE_ERROR_MEMORY;
+			goto cleanup;
+		}
+		gifImage->curFrame->nData = nData;
+		gifImage->curFrame->width = gif->width;
+		gifImage->curFrame->height = gif->height;
+		gifImage->curFrame->colorSpace = COLOR_SPACE_RGBA;
+	}else{
+		gifImage->curFrame = gifImage->frames;
+	}
+	
 	gifImage->frameNum = 0;
 	gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
 
@@ -496,11 +542,12 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, unsigned char** data, size_t s
 	}
 	
 	unsigned int pixWidth = gif->width*4;
-	unsigned int n, i, gifSize = pixWidth*gif->height;
+	unsigned int n, gifSize = pixWidth*gif->height;
 	for(n=0, i=0; n<gifSize; n+=pixWidth, i+=stride){
 		memcpy(gifImage->curFrame->pData + i, 
 			gif->frame_image +n, pixWidth);
 	}
+	gifImage->decodeCount = 1;
 	
 	*data = NULL;
 	if(gifImage->frameCount < 2){
