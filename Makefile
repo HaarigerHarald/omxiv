@@ -1,6 +1,6 @@
 OBJS=omxiv.o omx_image.o omx_render.o soft_image.o ./libnsbmp/libnsbmp.o ./libnsgif/libnsgif.o
 BIN=omxiv.bin
-LDFLAGS+=-lilclient -ljpeg -lpng -lrt -ldl -Wl,--gc-sections
+LDFLAGS+=-lilclient -ljpeg -lpng -lrt -ldl -Wl,--gc-sections -s
 INCLUDES+=-I./libnsbmp -I./libnsgif -I./libs/ilclient
 
 BUILDVERSION=\"$(shell git rev-parse --short=10 HEAD 2>/dev/null;test $$? -gt 0 && echo UNKNOWN)\"
@@ -10,7 +10,7 @@ CFLAGS+=-DVERSION=${BUILDVERSION} -DLCURL_NAME=$(LIBCURL_NAME)
 include Makefile.include
 
 $(BIN): $(OBJS)
-	$(CC) -o $@ -s $(OBJS) $(LDFLAGS)
+	$(CC) -o $@ $(OBJS) $(LDFLAGS)
 
 ilclient:
 	mkdir -p libs
@@ -22,3 +22,8 @@ install:
 	
 uninstall:
 	rm -f /usr/bin/omxiv
+
+debug: CFLAGS:=$(filter-out -O3,$(CFLAGS)) -Og
+debug: LDFLAGS:=$(filter-out -s,$(LDFLAGS))
+
+debug: all
