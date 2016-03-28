@@ -39,6 +39,9 @@
 
 #define ALIGN16(x) (((x+0xf)>>4)<<4)
 
+#define MIN_FRAME_DELAY_CS 2
+#define BUMP_UP_FRAME_DELAY_CS 10
+
 struct my_error_mgr {
 	struct jpeg_error_mgr pub;
 	jmp_buf setjmp_buffer;
@@ -397,7 +400,10 @@ static int decodeNextGifFrame(ANIM_IMAGE *gifImage){
 	gifImage->frameNum%=gifImage->frameCount;
 	
 	unsigned int stride = ALIGN16(gif->width)*4;
-	gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
+	if(gif->frames[gifImage->frameNum].frame_delay < MIN_FRAME_DELAY_CS)
+		gifImage->frameDelayCs = BUMP_UP_FRAME_DELAY_CS;
+	else
+		gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
 	
 	if(gifImage->frames){
 		gifImage->curFrame = &(gifImage->frames[gifImage->frameNum]);
@@ -533,7 +539,11 @@ int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, unsigned char** data, size_t s
 	}
 	
 	gifImage->frameNum = 0;
-	gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
+	
+	if(gif->frames[gifImage->frameNum].frame_delay < MIN_FRAME_DELAY_CS)
+		gifImage->frameDelayCs = BUMP_UP_FRAME_DELAY_CS;
+	else
+		gifImage->frameDelayCs = gif->frames[gifImage->frameNum].frame_delay;
 
 	code = gif_decode_frame(gif, gifImage->frameNum);
 	if (code != GIF_OK){
