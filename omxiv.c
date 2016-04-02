@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <termios.h>
 #include <signal.h>
 #include <dirent.h>
 #include <getopt.h>
+
+#include <sys/time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "omx_render.h"
 #include "omx_image.h"
@@ -50,6 +51,12 @@ static char end = 0;
 static char info = 0, blank = 0, soft = 0, keys = 1, center = 0;
 static char color = COLOR_SPACE_RGBA;
 static uint32_t sWidth, sHeight;
+static int initRotation = 0;
+
+static OMX_RENDER render = INIT_OMX_RENDER, render2;
+static OMX_RENDER* pCurRender = &render;
+static OMX_RENDER_DISP_CONF dispConfig = INIT_OMX_DISP_CONF;
+
 
 static void resetTerm(){
 	struct termios old = {0};
@@ -192,35 +199,54 @@ static char getch(const int timeout) {
 	return (buf);
 }
 
-static int renderImage(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf, 
-		IMAGE *image, ANIM_IMAGE *anim, OMX_RENDER_TRANSITION *transition){
+static int renderImage(IMAGE *image, ANIM_IMAGE *anim){
 	int ret;
+	OMX_RENDER *stopRender = NULL;
 	
-	if(render->component){
-		ret = stopOmxImageRender(render);
-		if(ret != 0){
-			fprintf(stderr, "render cleanup returned 0x%x\n", ret);
-			return ret;
+	if(render.transition.type == BLEND){
+		stopRender = pCurRender;
+		if(stopRender->component){
+			dispConfig.layer--;
+			setOmxDisplayConfig(stopRender);
+			dispConfig.layer++;
+		}
+		
+		pCurRender = (pCurRender == &render) ? &render2 : &render;
+	}else{
+		if(pCurRender->component){
+			ret = stopOmxImageRender(pCurRender);
+			if(ret != 0){
+				fprintf(stderr, "render cleanup returned 0x%x\n", ret);
+				return ret;
+			}
 		}
 	}
+	
+	dispConfig.rotation = initRotation;
+	
 	if(anim->frameCount < 2){
-		dispConf->cImageWidth = image->width;
-		dispConf->cImageHeight = image->height;
-		ret = omxRenderImage(render, image, dispConf, transition);
+		dispConfig.cImageWidth = image->width;
+		dispConfig.cImageHeight = image->height;
+		ret = omxRenderImage(pCurRender, image);
 		destroyImage(image);
 	}else{
-		dispConf->cImageWidth = anim->curFrame->width;
-		dispConf->cImageHeight = anim->curFrame->height;
-		ret = omxRenderAnimation(render, anim, dispConf, transition);
+		dispConfig.cImageWidth = anim->curFrame->width;
+		dispConfig.cImageHeight = anim->curFrame->height;
+		ret = omxRenderAnimation(pCurRender, anim);
 	}
 	if(ret != 0){
 		fprintf(stderr, "render returned 0x%x\n", ret);
 	}
+	
+	if(stopRender && stopRender->component){
+		ret = stopOmxImageRender(stopRender);
+		if(ret != 0)
+			fprintf(stderr, "render cleanup returned 0x%x\n", ret);
+	}
 	return ret;
 }
 
-static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim, 
-		OMX_RENDER_DISP_CONF *dispConfig){
+static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim){
 	int ret = 0;
 	FILE *imageFile;
 	unsigned char *httpImMem = NULL;
@@ -302,15 +328,15 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim,
 		IMAGE image2;
 		image2.colorSpace = color;
 		if(center){
-			if((dispConfig->rotation == 90 || dispConfig->rotation == 270) &&
+			if((dispConfig.rotation == 90 || dispConfig.rotation == 270) &&
 				(image->width > sHeight|| image->height > sWidth)){
 					
-				image2.height = dispConfig->height;
-				image2.width = dispConfig->width;
+				image2.height = dispConfig.height;
+				image2.width = dispConfig.width;
 			} else if(image->height > sHeight && image->width > sWidth){
-				image2.height = dispConfig->height;
-				image2.width = dispConfig->width;
-			}else if(dispConfig->rotation == 90 || dispConfig->rotation == 270){
+				image2.height = dispConfig.height;
+				image2.width = dispConfig.width;
+			}else if(dispConfig.rotation == 90 || dispConfig.rotation == 270){
 				image2.height = image->width;
 				image2.width = image->height;
 			}else{
@@ -318,12 +344,12 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim,
 				image2.width = image->width;
 			}
 		}else{
-			image2.height = dispConfig->height;
-			image2.width = dispConfig->width;
+			image2.height = dispConfig.height;
+			image2.width = dispConfig.width;
 		}
 			
-		ret = omxAutoResize(client, image, &image2, dispConfig->display, dispConfig->rotation, 
-				dispConfig->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT);
+		ret = omxAutoResize(client, image, &image2, dispConfig.display, dispConfig.rotation, 
+				dispConfig.configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT);
 		if(ret != OMX_IMAGE_OK){
 			printf("resize returned 0x%x\n", ret);
 		}else{
@@ -389,16 +415,12 @@ static void printVersion(){
 int main(int argc, char *argv[]){
 	int ret = 1;
 	long timeout = 0;
-	int initRotation = 0;
 
-	OMX_RENDER_DISP_CONF dispConfig = INIT_OMX_DISP_CONF;
-	OMX_RENDER_TRANSITION transition;
-	transition.type = NONE;
-	transition.durationMs = 400;
+	render.transition.type = NONE;
+	render.transition.durationMs = 400;
 
-	if(isBackgroundProc()){
+	if(isBackgroundProc())
 		keys=0;
-	}
 	
 	int opt;
 	while((opt = getopt_long(argc, argv, "hvt:bT:a:o:ml:d:iks", 
@@ -418,10 +440,10 @@ int main(int argc, char *argv[]){
 				blank = 1; break;
 			case 'T':
 				if(strcmp(optarg, "blend") == 0)
-					transition.type = BLEND;
+					render.transition.type = BLEND;
 				break;
 			case 0x101:
-				transition.durationMs = strtol(optarg, NULL, 10);
+				render.transition.durationMs = strtol(optarg, NULL, 10);
 				break;
 			case 0x102:;
 				char *pos = strtok(optarg ,", '");
@@ -512,20 +534,21 @@ int main(int argc, char *argv[]){
 		}
 	}
 
-	OMX_RENDER render = INIT_OMX_RENDER;
-	render.client=client;
+	render.client = client;
+	render.dispConfig = &dispConfig;
+	memcpy(&render2, &render, sizeof(OMX_RENDER));
 	unsigned long lShowTime = 0;
 	unsigned long cTime;
 	IMAGE image = {0};
 	ANIM_IMAGE anim = {0};
 	
-	ret=decodeImage(files[0], &image, &anim, &dispConfig);
+	ret=decodeImage(files[0], &image, &anim);
 
 	if(ret==0){
 		if(blank)
 			blankBackground(dispConfig.layer, dispConfig.display);
 		lShowTime = getCurrentTimeMs();
-		if(renderImage(&render, &dispConfig, &image, &anim, &transition) != 0)
+		if(renderImage(&image, &anim) != 0)
 			end = 1;
 	}else{
 		if(ret == SOFT_IMAGE_ERROR_FILE_OPEN){
@@ -554,12 +577,11 @@ int main(int argc, char *argv[]){
 			if( (cTime-lShowTime) > timeout){
 				if(imageNum <= ++i)
 					i=0;
-				dispConfig.rotation = initRotation;
-				stopAnimation(&render);
-				ret=decodeImage(files[i], &image, &anim, &dispConfig);
+				stopAnimation(pCurRender);
+				ret=decodeImage(files[i], &image, &anim);
 				if(ret==0){
 					lShowTime = getCurrentTimeMs();
-					if(renderImage(&render, &dispConfig, &image, &anim, &transition) != 0)
+					if(renderImage(&image, &anim) != 0)
 						break;
 				}
 			}
@@ -572,7 +594,7 @@ int main(int argc, char *argv[]){
 		}else if(c == 'm' || c =='M'){
 			tcflush(0, TCIFLUSH);
 			dispConfig.configFlags^= OMX_DISP_CONFIG_FLAG_MIRROR;
-			ret = setOmxDisplayConfig(&render, &dispConfig);
+			ret = setOmxDisplayConfig(pCurRender);
 			if(ret != 0){
 				fprintf(stderr, "dispConfig set returned 0x%x\n", ret);
 				break;
@@ -588,7 +610,7 @@ int main(int argc, char *argv[]){
 					dispConfig.rotation-= 90;
 				else
 					dispConfig.rotation=270;
-				ret = setOmxDisplayConfig(&render, &dispConfig);
+				ret = setOmxDisplayConfig(pCurRender);
 				if(ret != 0){
 					fprintf(stderr, "dispConfig set returned 0x%x\n", ret);
 					break;
@@ -596,7 +618,7 @@ int main(int argc, char *argv[]){
 			}else if(c == 0x42){
 				dispConfig.rotation+= 90;
 				dispConfig.rotation%=360;
-				ret = setOmxDisplayConfig(&render, &dispConfig);
+				ret = setOmxDisplayConfig(pCurRender);
 				if(ret != 0){
 					fprintf(stderr, "dispConfig set returned 0x%x\n", ret);
 					break;
@@ -604,23 +626,21 @@ int main(int argc, char *argv[]){
 			}else if(c == 0x43 && imageNum > 1){
 				if(imageNum <= ++i)
 					i=0;
-				dispConfig.rotation= initRotation;
-				stopAnimation(&render);
-				ret=decodeImage(files[i], &image, &anim, &dispConfig);
+				stopAnimation(pCurRender);
+				ret=decodeImage(files[i], &image, &anim);
 				if(ret==0){
 					lShowTime = getCurrentTimeMs();
-					if(renderImage(&render, &dispConfig, &image, &anim, &transition) != 0)
+					if(renderImage(&image, &anim) != 0)
 						break;
 				}
 			}else if(c == 0x44 && imageNum > 1){
 				if(0 > --i)
 					i=imageNum-1;
-				dispConfig.rotation= initRotation;
-				stopAnimation(&render);
-				ret=decodeImage(files[i], &image, &anim, &dispConfig);
+				stopAnimation(pCurRender);
+				ret=decodeImage(files[i], &image, &anim);
 				if(ret==0){
 					lShowTime = getCurrentTimeMs();
-					if(renderImage(&render, &dispConfig, &image, &anim, &transition) != 0)
+					if(renderImage(&image, &anim) != 0)
 						break;
 				}
 			}
@@ -635,7 +655,7 @@ int main(int argc, char *argv[]){
 	}
 
 	if(ret == 0){
-		ret = stopOmxImageRender(&render);
+		ret = stopOmxImageRender(pCurRender);
 		if(ret != 0)
 			fprintf(stderr, "render cleanup returned 0x%x\n", ret);
 	}

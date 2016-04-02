@@ -64,21 +64,22 @@ typedef struct OMX_RENDER_DISP_CONF{
 	
 } OMX_RENDER_DISP_CONF;
 
-typedef enum {NONE, BLEND} transition;
-
-typedef struct OMX_RENDER_TRANSITION{
-	transition type;
+struct OMX_RENDER_TRANSITION{
+	enum transition_t{NONE, BLEND} type;
 	int durationMs;
 	
 } OMX_RENDER_TRANSITION;
 
-#define INIT_OMX_RENDER {0, 0, 0, 0, 0, 0, 0, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER}
+#define INIT_OMX_RENDER {0, 0, 0, 0, {0}, 0, 0, 0, 0, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER}
 
 typedef struct OMX_RENDER{
 	ILCLIENT_T *client;
 	COMPONENT_T *component;
 	OMX_HANDLETYPE handle;
 	int inPort;
+	
+	struct OMX_RENDER_TRANSITION transition;
+	OMX_RENDER_DISP_CONF *dispConfig;
 	
 	OMX_BUFFERHEADERTYPE *pInputBufferHeader;
 	
@@ -91,17 +92,15 @@ typedef struct OMX_RENDER{
 } OMX_RENDER;
 
 /** Change display configuration of the image render component. */
-int setOmxDisplayConfig(OMX_RENDER *render, OMX_RENDER_DISP_CONF *dispConf);
+int setOmxDisplayConfig(OMX_RENDER *render);
 
 /** Renders an image on an omx-video_render component. */
-int omxRenderImage(OMX_RENDER *render, IMAGE *image, OMX_RENDER_DISP_CONF *dispConfig, 
-		OMX_RENDER_TRANSITION *transition);
+int omxRenderImage(OMX_RENDER *render, IMAGE *image);
 
 /** Stops rendering of current image and cleans up. */
 int stopOmxImageRender(OMX_RENDER *render);
 
-int omxRenderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim, OMX_RENDER_DISP_CONF *dispConfig,
-		OMX_RENDER_TRANSITION *transition);
+int omxRenderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim);
 
 void stopAnimation(OMX_RENDER *render);
 
