@@ -333,7 +333,7 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim){
 					
 				image2.height = dispConfig.height;
 				image2.width = dispConfig.width;
-			} else if(image->height > sHeight && image->width > sWidth){
+			}else if(image->height > sHeight || image->width > sWidth){
 				image2.height = dispConfig.height;
 				image2.width = dispConfig.width;
 			}else if(dispConfig.rotation == 90 || dispConfig.rotation == 270){
