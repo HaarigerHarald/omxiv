@@ -176,7 +176,7 @@ void printUsage(const char *progr){
 	printf("    LEFT    :   Previous image\n");
 	printf("    RIGHT   :   Next image\n");
 	printf("    UP      :   Rotate right\n");
-	printf("    Down    :   Rotate left\n");
+	printf("    DOWN    :   Rotate left\n");
 	printf("    m       :   Mirror image\n");
 	printf("    p       :   Pause slide show\n");
 	printf("\n");
@@ -300,6 +300,13 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim){
 			if(info)
 				printf("Hard decode jpeg\n");
 			ret = omxDecodeJpeg(client, imageFile, image);
+			if(ret != 0){
+				rewind(imageFile);
+				destroyImage(image);
+				if(info)
+					printf("Error fallback to soft decodeing\n");
+				ret = softDecodeJpeg(imageFile, image);
+			}
 		}
 	}else if(memcmp(magNum, magNumPng, sizeof(magNumPng)) == 0){
 		ret = softDecodePng(imageFile, image);
