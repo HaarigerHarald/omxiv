@@ -32,11 +32,13 @@
 #include "omx_render.h"
 #include "bcm_host.h"
 
+#define ALIGN2(x) (((x+1)>>1)<<1)
+
 #define TIMEOUT_MS 2000
 
 static int initRender(OMX_RENDER *render){
 	int ret = ilclient_create_component(render->client,
-					&render->component,"video_render",
+					&render->renderComponent,"video_render",
 					ILCLIENT_DISABLE_ALL_PORTS|
 					ILCLIENT_ENABLE_INPUT_BUFFERS);
 							
@@ -44,85 +46,175 @@ static int initRender(OMX_RENDER *render){
 		return OMX_RENDER_ERROR_CREATE_COMP;
 	}
 	
-	render->handle = ILC_GET_HANDLE(render->component);
+	render->renderHandle = ILC_GET_HANDLE(render->renderComponent);
 	
 	OMX_PORT_PARAM_TYPE port;
 	port.nSize = sizeof(OMX_PORT_PARAM_TYPE);
 	port.nVersion.nVersion = OMX_VERSION;
 	
-	OMX_GetParameter(render->handle, OMX_IndexParamVideoInit, &port);
+	OMX_GetParameter(render->renderHandle, OMX_IndexParamVideoInit, &port);
 	if (port.nPorts != 1) {
 		return OMX_RENDER_ERROR_PORTS;
 	}
-	render->inPort = port.nStartPortNumber;	
+	render->renderInPort = port.nStartPortNumber;
+	
+	// Init resize
+	ret = ilclient_create_component(render->client,
+					&render->resizeComponent, "resize",
+					ILCLIENT_DISABLE_ALL_PORTS|
+					ILCLIENT_ENABLE_INPUT_BUFFERS|
+					ILCLIENT_ENABLE_OUTPUT_BUFFERS);
+	if (ret != 0) {
+		return OMX_RENDER_ERROR_CREATE_COMP;
+	}
+
+	render->resizeHandle = ILC_GET_HANDLE(render->resizeComponent);
+
+	OMX_GetParameter(render->resizeHandle,OMX_IndexParamImageInit, &port);
+	if (port.nPorts != 2) {
+		return OMX_RENDER_ERROR_PORTS;
+	}
+	render->resizeInPort = port.nStartPortNumber;
+	render->resizeOutPort = port.nStartPortNumber + 1;
 	
 	return OMX_RENDER_OK;
 }
 
-static int setUpRender(OMX_RENDER *render, IMAGE *image){
-
+static int initResizer(OMX_RENDER *render, IMAGE *inImage){
 	OMX_PARAM_PORTDEFINITIONTYPE portdef;
 	int ret;
-	
-	ilclient_change_component_state(render->component, OMX_StateIdle);
-	ilclient_change_component_state(render->component, OMX_StateExecuting);
+
+	ilclient_change_component_state(render->resizeComponent, OMX_StateIdle);
 
 	portdef.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
 	portdef.nVersion.nVersion = OMX_VERSION;
-	portdef.nPortIndex = render->inPort;
+	portdef.nPortIndex = render->resizeInPort;
 
-	ret = OMX_GetParameter(render->handle, OMX_IndexParamPortDefinition, &portdef);
+	ret = OMX_GetParameter(render->resizeHandle, OMX_IndexParamPortDefinition, &portdef);
 	if (ret != OMX_ErrorNone) {
 		return OMX_RENDER_ERROR_PARAMETER;
 	}
 	
-	portdef.format.video.bFlagErrorConcealment = OMX_FALSE;
-	portdef.format.video.eCompressionFormat = OMX_VIDEO_CodingUnused;
-	portdef.format.video.nFrameWidth = image->width;
-	portdef.format.video.nFrameHeight = image->height;
-	portdef.format.video.nStride = 0;
-	portdef.format.video.nSliceHeight = 0;
+	portdef.format.image.eCompressionFormat = OMX_IMAGE_CodingUnused;
+	portdef.format.image.bFlagErrorConcealment = OMX_FALSE;
+	portdef.format.image.nFrameWidth = inImage->width;
+	portdef.format.image.nFrameHeight = inImage->height;
+	portdef.format.image.nStride = 0;
+	portdef.format.image.nSliceHeight = 0;
 	
-	if(image->colorSpace == COLOR_SPACE_RGB24)
-		portdef.format.video.eColorFormat = OMX_COLOR_Format24bitBGR888;
-	else if(image->colorSpace == COLOR_SPACE_YUV420P)
-		portdef.format.video.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar;
-	else if(image->colorSpace == COLOR_SPACE_RGBA)
-		portdef.format.video.eColorFormat = OMX_COLOR_Format32bitABGR8888;
-	else if(image->colorSpace == COLOR_SPACE_RGB16)
-		portdef.format.video.eColorFormat = OMX_COLOR_Format16bitRGB565;
 	
-	portdef.nBufferSize=image->nData;
-	
-	ret = OMX_SetParameter(render->handle, OMX_IndexParamPortDefinition, &portdef);
+	if(inImage->colorSpace == COLOR_SPACE_YUV420P)
+		portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar;
+	else if(inImage->colorSpace == COLOR_SPACE_RGBA)
+		portdef.format.image.eColorFormat = OMX_COLOR_Format32bitABGR8888;
+	else if(inImage->colorSpace == COLOR_SPACE_RGB16)
+		portdef.format.image.eColorFormat = OMX_COLOR_Format16bitRGB565;
+		
+	portdef.nBufferSize=inImage->nData;
+		
+
+	ret = OMX_SetParameter(render->resizeHandle, OMX_IndexParamPortDefinition, &portdef);
 	if (ret != OMX_ErrorNone) {	
 		return OMX_RENDER_ERROR_PARAMETER;
 	}
 	
-	OMX_SendCommand(render->handle, OMX_CommandPortEnable, render->inPort, NULL);
-	
-	ret = OMX_UseBuffer(render->handle,&render->pInputBufferHeader,render->inPort, 
-			NULL, portdef.nBufferSize, (OMX_U8 *) image->pData);
+	ret = OMX_SendCommand(render->resizeHandle, OMX_CommandPortEnable, render->resizeInPort, NULL);
+	if(ret != OMX_ErrorNone){
+		return OMX_RENDER_ERROR_PORTS;
+	}
+
+	ret = OMX_UseBuffer(render->resizeHandle,&render->pInputBufferHeader,render->resizeInPort, 
+			NULL, portdef.nBufferSize, (OMX_U8 *) inImage->pData);
 			
 	if(ret != OMX_ErrorNone){
 		return OMX_RENDER_ERROR_MEMORY;
 	}
 	
+	render->pSettingsChanged = 0;
+	ilclient_change_component_state(render->resizeComponent, OMX_StateExecuting);
+	
 	return OMX_RENDER_OK;
 }
 
-static int doRender(OMX_RENDER *render, IMAGE *image){
+static int resizePortSettingsChanged(OMX_RENDER *render, unsigned int width, unsigned int height){
+	OMX_PARAM_PORTDEFINITIONTYPE portdef;
+	int ret;
+	
+	portdef.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
+	portdef.nVersion.nVersion = OMX_VERSION;
+	portdef.nPortIndex = render->resizeOutPort;
+	OMX_GetParameter(render->resizeHandle, OMX_IndexParamPortDefinition, &portdef);
+	
+	portdef.format.image.eCompressionFormat = OMX_IMAGE_CodingUnused;
+	portdef.format.image.bFlagErrorConcealment = OMX_FALSE;
+	portdef.format.image.eColorFormat = OMX_COLOR_Format32bitABGR8888;
+	
+	portdef.format.image.nFrameWidth = width;
+	portdef.format.image.nFrameHeight = height;
+	portdef.format.image.nStride = 0;
+	portdef.format.image.nSliceHeight = 0;
+	
+	ret = OMX_SetParameter(render->resizeHandle, OMX_IndexParamPortDefinition, &portdef);
+	if(ret != OMX_ErrorNone){
+		return OMX_RENDER_ERROR_PARAMETER;
+	}
+	
+	ilclient_change_component_state(render->renderComponent, OMX_StateIdle);
+	ilclient_change_component_state(render->renderComponent, OMX_StateExecuting);
+	
+	portdef.nPortIndex = render->renderInPort;
+	OMX_GetParameter(render->renderHandle, OMX_IndexParamPortDefinition, &portdef);
+	
+	portdef.format.image.eCompressionFormat = OMX_IMAGE_CodingUnused;
+	portdef.format.image.bFlagErrorConcealment = OMX_FALSE;
+	portdef.format.image.eColorFormat = OMX_COLOR_Format32bitABGR8888;
+	
+	portdef.format.image.nFrameWidth = width;
+	portdef.format.image.nFrameHeight = height;
+	portdef.format.image.nStride = 0;
+	portdef.format.image.nSliceHeight = 0;
+	
+	ret = OMX_SetParameter(render->renderHandle, OMX_IndexParamPortDefinition, &portdef);
+	if(ret != OMX_ErrorNone){
+		return OMX_RENDER_ERROR_PARAMETER;
+	}
+	
+	OMX_SetupTunnel(render->resizeHandle, render->resizeOutPort,
+		    render->renderHandle, render->renderInPort);
+	
+	
+	ret = OMX_SendCommand(render->resizeHandle, OMX_CommandPortEnable, render->resizeOutPort, NULL);
+	if(ret != OMX_ErrorNone){
+		return OMX_RENDER_ERROR_PORTS;
+	}
+	
+	ret = OMX_SendCommand(render->renderHandle, OMX_CommandPortEnable, render->renderInPort, NULL);
+	if(ret != OMX_ErrorNone){
+		return OMX_RENDER_ERROR_PORTS;
+	}
+	
+	return OMX_RENDER_OK;
+}
+
+static int doRender(OMX_RENDER *render, IMAGE *inImage, unsigned int width, unsigned int height){
 	int retVal= OMX_RENDER_OK;
 	OMX_BUFFERHEADERTYPE *pBufHeader = render->pInputBufferHeader;
-	pBufHeader->nFilledLen=image->nData;
-	pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;	
+	pBufHeader->nFilledLen=inImage->nData;
+	pBufHeader->nFlags = OMX_BUFFERFLAG_EOS;
 	
-	int ret = OMX_EmptyThisBuffer(render->handle, pBufHeader);
+	int ret = OMX_EmptyThisBuffer(render->resizeHandle, pBufHeader);
 	if (ret != OMX_ErrorNone) {
 		 retVal |= OMX_RENDER_ERROR_MEMORY;
 	}
 	
-	ilclient_wait_for_event(render->component, OMX_EventBufferFlag, render->inPort, 
+	if(render->pSettingsChanged == 0 && ilclient_wait_for_event(render->resizeComponent,OMX_EventPortSettingsChanged, 
+			render->resizeOutPort, 0, 0, 1, ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, TIMEOUT_MS) == 0){	
+		
+		retVal|= resizePortSettingsChanged(render, width, height);
+		render->pSettingsChanged=1;
+	}
+	
+	ilclient_wait_for_event(render->renderComponent, OMX_EventBufferFlag, render->renderInPort, 
 		0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, TIMEOUT_MS);
 	
 	return retVal;
@@ -132,7 +224,7 @@ int setOmxDisplayConfig(OMX_RENDER *render){
 	OMX_CONFIG_DISPLAYREGIONTYPE dispConfRT;
 	OMX_RENDER_DISP_CONF *dispConf = render->dispConfig;
 	memset(&dispConfRT, 0 , sizeof(OMX_CONFIG_DISPLAYREGIONTYPE));
-	dispConfRT.nPortIndex = render->inPort;
+	dispConfRT.nPortIndex = render->renderInPort;
 	dispConfRT.nSize= sizeof(OMX_CONFIG_DISPLAYREGIONTYPE);
 	dispConfRT.nVersion.nVersion = OMX_VERSION;
 	
@@ -224,19 +316,79 @@ int setOmxDisplayConfig(OMX_RENDER *render){
 	dispConfRT.num = dispConf->display;
 	dispConfRT.mode = dispConf->mode;
 	dispConfRT.set= set;
-	if(OMX_SetConfig(render->handle, OMX_IndexConfigDisplayRegion, &dispConfRT) != OMX_ErrorNone){
+	if(OMX_SetConfig(render->renderHandle, OMX_IndexConfigDisplayRegion, &dispConfRT) != OMX_ErrorNone){
 		return OMX_RENDER_ERROR_DISP_CONF;
 	}
 	return OMX_RENDER_OK;
 }
 
+static void calculateResize(OMX_RENDER_DISP_CONF *dispConf, uint32_t* pWidth, uint32_t* pHeight){
+	uint32_t sWidth, sHeight;
+	
+	if(dispConf->height > 0 && dispConf->width > 0){
+		sWidth = dispConf->width;
+		sHeight = dispConf->height;
+	}else{
+		graphics_get_display_size(dispConf->display, &sWidth, &sHeight);
+	}
+	
+	if(dispConf->configFlags & OMX_DISP_CONFIG_FLAG_CENTER){
+		if(dispConf->rotation == 90 || dispConf->rotation == 270){
+			if(dispConf->cImageWidth < sHeight &&  dispConf->cImageHeight < sWidth){
+				sWidth = dispConf->cImageHeight;
+				sHeight = dispConf->cImageWidth;
+			}else{
+				uint32_t rotHeight = sHeight;
+				sHeight = sWidth;
+				sWidth = rotHeight;
+			}
+		}else if(dispConf->cImageWidth < sWidth &&  dispConf->cImageHeight < sHeight){
+			sWidth = dispConf->cImageWidth;
+			sHeight = dispConf->cImageHeight;
+		}
+	}else if(dispConf->rotation == 90 || dispConf->rotation == 270){
+		uint32_t rotHeight = sHeight;
+		sHeight = sWidth;
+		sWidth = rotHeight;
+	}
+	
+	if(!(dispConf->configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT)){
+		float dAspect = (float) sWidth / sHeight;
+		float iAspect = (float) dispConf->cImageWidth / dispConf->cImageHeight;
+
+		if(dAspect > iAspect){
+			(*pWidth) = ALIGN2((int) (sHeight * iAspect));
+			(*pHeight) = sHeight;
+		}else{
+			(*pHeight) = ALIGN2((int) (sWidth / iAspect));
+			(*pWidth) = sWidth;
+		}
+	}else{
+		(*pHeight) = sHeight;
+		(*pWidth) = sWidth;
+	}
+}
+
 
 int omxRenderImage(OMX_RENDER *render, IMAGE *image){
+	uint32_t width, height;
+	render->dispConfig->cImageWidth = image->width;
+	render->dispConfig->cImageHeight = image->height;
+	calculateResize(render->dispConfig, &width, &height);
+	render->dispConfig->cImageWidth = width;
+	render->dispConfig->cImageHeight = height;
+	
 	render->renderAnimation = 0;
 	int ret = initRender(render);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
+	
+	ret = initResizer(render, image);
+	if(ret!= OMX_RENDER_OK){
+		return ret;
+	}
+	
 	if(render->transition.type == BLEND)
 		render->dispConfig->alpha = 15;
 	
@@ -244,14 +396,12 @@ int omxRenderImage(OMX_RENDER *render, IMAGE *image){
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
-	ret = setUpRender(render, image);
+	ret = doRender(render, image, width, height);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
-	ret = doRender(render, image);
-	if(ret!= OMX_RENDER_OK){
-		return ret;
-	}
+	
+	ilclient_change_component_state(render->resizeComponent, OMX_StateIdle);
 	
 	if(render->transition.type == BLEND){
 		while(render->dispConfig->alpha<255){
@@ -279,8 +429,9 @@ static void* doRenderAnimation(void* params){
 	if(anim->loopCount <= 0){
 		while(ret == 0 && render->stop == 0){
 			for(i=anim->frameCount; i--;){
-				doRender(render, anim->curFrame);
 				clock_gettime(CLOCK_REALTIME, &wait);
+				doRender(render, anim->curFrame,
+					render->dispConfig->cImageWidth, render->dispConfig->cImageHeight);
 				
 				unsigned int sec = anim->frameDelayCs/100;
 				anim->frameDelayCs -= sec*100;
@@ -299,20 +450,15 @@ static void* doRenderAnimation(void* params){
 				if(render->stop != 0)
 					goto end;
 				
-				int ret=OMX_FreeBuffer(render->handle, render->inPort, render->pInputBufferHeader);
-				if(ret!= OMX_ErrorNone)
-					goto end;
-				ret = OMX_UseBuffer(render->handle,&render->pInputBufferHeader,render->inPort, 
-					NULL, anim->curFrame->nData, (OMX_U8 *) anim->curFrame->pData);
-				if(ret!= OMX_ErrorNone)
-					goto end;
+				render->pInputBufferHeader->pBuffer = (OMX_U8*) anim->curFrame->pData;
 			}
 		}
 	}else{
 		while(anim->loopCount-- && ret == 0 && render->stop == 0){
 			for(i=anim->frameCount; i--;){
-				doRender(render, anim->curFrame);
 				clock_gettime(CLOCK_REALTIME, &wait);
+				doRender(render, anim->curFrame, 
+					render->dispConfig->cImageWidth, render->dispConfig->cImageHeight);
 				
 				unsigned int sec = anim->frameDelayCs/100;
 				anim->frameDelayCs -= sec*100;
@@ -331,13 +477,7 @@ static void* doRenderAnimation(void* params){
 				if(render->stop != 0)
 					goto end;
 				
-				int ret=OMX_FreeBuffer(render->handle, render->inPort, render->pInputBufferHeader);
-				if(ret!= OMX_ErrorNone)
-					goto end;
-				ret = OMX_UseBuffer(render->handle,&render->pInputBufferHeader,render->inPort, 
-					NULL, anim->curFrame->nData, (OMX_U8 *) anim->curFrame->pData);
-				if(ret!= OMX_ErrorNone)
-					goto end;
+				render->pInputBufferHeader->pBuffer = (OMX_U8*) anim->curFrame->pData;
 			}
 		}
 	}
@@ -349,18 +489,28 @@ end:
 
 int omxRenderAnimation(OMX_RENDER *render, ANIM_IMAGE *anim){
 	render->renderAnimation = 1;
+	render->dispConfig->cImageWidth = anim->curFrame->width;
+	render->dispConfig->cImageHeight = anim->curFrame->height;
+	
+	uint32_t width, height;
+	calculateResize(render->dispConfig, &width, &height);
+	render->dispConfig->cImageWidth = width;
+	render->dispConfig->cImageHeight = height;
+	
 	int ret = initRender(render);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
+	
+	ret = initResizer(render, anim->curFrame);
+	if(ret!= OMX_RENDER_OK){
+		return ret;
+	}
+	
 	if(render->transition.type == BLEND)
 		render->dispConfig->alpha = 15;
 	
 	ret = setOmxDisplayConfig(render);
-	if(ret!= OMX_RENDER_OK){
-		return ret;
-	}
-	ret = setUpRender(render, anim->curFrame);
 	if(ret!= OMX_RENDER_OK){
 		return ret;
 	}
@@ -405,27 +555,58 @@ int stopOmxImageRender(OMX_RENDER *render){
 	
 	stopAnimation(render);
 	
-	// OMX_SendCommand(render->handle, OMX_CommandFlush, render->inPort, NULL);
+	// OMX_SendCommand(render->renderHandle, OMX_CommandFlush, render->renderInPort, NULL);
 	
-	// ilclient_wait_for_event(render->component,OMX_EventCmdComplete, OMX_CommandFlush, 
-			// 0, render->inPort, 0, ILCLIENT_PORT_FLUSH, TIMEOUT_MS);
+	// ilclient_wait_for_event(render->renderComponent,OMX_EventCmdComplete, OMX_CommandFlush, 
+			// 0, render->renderInPort, 0, ILCLIENT_PORT_FLUSH, TIMEOUT_MS);
 			
-	OMX_SendCommand(render->handle, OMX_CommandPortDisable, render->inPort, NULL);
-		
-	int ret=OMX_FreeBuffer(render->handle, render->inPort, render->pInputBufferHeader);
+	int ret= OMX_FreeBuffer(render->resizeHandle, render->resizeInPort, render->pInputBufferHeader);
 	if(ret!= OMX_ErrorNone){
 		retVal|=OMX_RENDER_ERROR_MEMORY;
-	}				
-								
-	ilclient_change_component_state(render->component, OMX_StateIdle);				
-	ilclient_change_component_state(render->component, OMX_StateLoaded);
+	}
 	
-	COMPONENT_T *list[2];
-	list[0]=render->component;
-	list[1]=NULL;
+	ret = OMX_SendCommand(render->resizeHandle, OMX_CommandPortDisable, render->resizeInPort, NULL);
+	if(ret!= OMX_ErrorNone){
+		retVal |= OMX_RENDER_ERROR_PORTS;
+	}
+		
+	ilclient_wait_for_event(render->resizeComponent, OMX_EventCmdComplete, 
+			OMX_CommandPortDisable, 0, render->resizeInPort, 0, 
+			ILCLIENT_PORT_DISABLED, TIMEOUT_MS);		
+	
+	OMX_SendCommand(render->resizeHandle, OMX_CommandFlush, render->resizeOutPort, NULL);
+	OMX_SendCommand(render->renderHandle, OMX_CommandFlush, render->renderInPort, NULL);
+		
+	ilclient_wait_for_event(render->resizeComponent,OMX_EventCmdComplete, OMX_CommandFlush, 
+		0, render->resizeOutPort, 0, ILCLIENT_PORT_FLUSH ,TIMEOUT_MS);
+		
+	ilclient_wait_for_event(render->renderComponent,OMX_EventCmdComplete, OMX_CommandFlush, 
+		0, render->renderInPort, 0, ILCLIENT_PORT_FLUSH ,TIMEOUT_MS);
+
+	ret= OMX_SendCommand(render->resizeHandle, OMX_CommandPortDisable, render->resizeOutPort, NULL);	
+	if(ret!= OMX_ErrorNone){
+		retVal|=OMX_RENDER_ERROR_PORTS;
+	}
+			
+	ret = OMX_SendCommand(render->renderHandle, OMX_CommandPortDisable, render->renderInPort, NULL);
+	if(ret!= OMX_ErrorNone){
+		retVal|=OMX_RENDER_ERROR_PORTS;
+	}
+	
+	ilclient_change_component_state(render->resizeComponent, OMX_StateIdle);
+	ilclient_change_component_state(render->resizeComponent, OMX_StateLoaded);	
+								
+	ilclient_change_component_state(render->renderComponent, OMX_StateIdle);				
+	ilclient_change_component_state(render->renderComponent, OMX_StateLoaded);
+	
+	COMPONENT_T *list[3];
+	list[0]=render->renderComponent;
+	list[1]=render->resizeComponent;
+	list[2]=NULL;
 	ilclient_cleanup_components(list);
 	
-	render->component = NULL;
+	render->renderComponent = NULL;
+	render->resizeComponent = NULL;
 	
 	return retVal;
 }

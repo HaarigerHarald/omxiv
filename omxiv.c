@@ -49,7 +49,6 @@ static ILCLIENT_T *client=NULL;
 static char end = 0;
 
 static char info = 0, blank = 0, soft = 0, keys = 1, center = 0;
-static char color = COLOR_SPACE_RGBA;
 static uint32_t sWidth, sHeight;
 static int initRotation = 0;
 
@@ -88,16 +87,6 @@ static unsigned long getCurrentTimeMs(){
 	struct timeval  tv;
 	gettimeofday(&tv, NULL);
 	return (tv.tv_sec) * 1000UL + (tv.tv_usec) / 1000UL ;
-}
-
-static void cpyImage(IMAGE *from, IMAGE *to){
-	if(to->pData != from->pData)
-		destroyImage(to);
-	to->colorSpace = from->colorSpace;
-	to->width = from->width;
-	to->height = from->height;
-	to->nData = from->nData;
-	to->pData = from->pData;
 }
 
 static int imageFilter(const struct dirent *entry){
@@ -205,7 +194,7 @@ static int renderImage(IMAGE *image, ANIM_IMAGE *anim){
 	
 	if(render.transition.type == BLEND){
 		stopRender = pCurRender;
-		if(stopRender->component){
+		if(stopRender->renderComponent){
 			dispConfig.layer--;
 			setOmxDisplayConfig(stopRender);
 			dispConfig.layer++;
@@ -213,7 +202,7 @@ static int renderImage(IMAGE *image, ANIM_IMAGE *anim){
 		
 		pCurRender = (pCurRender == &render) ? &render2 : &render;
 	}else{
-		if(pCurRender->component){
+		if(pCurRender->renderComponent){
 			ret = stopOmxImageRender(pCurRender);
 			if(ret != 0){
 				fprintf(stderr, "render cleanup returned 0x%x\n", ret);
@@ -225,20 +214,16 @@ static int renderImage(IMAGE *image, ANIM_IMAGE *anim){
 	dispConfig.rotation = initRotation;
 	
 	if(anim->frameCount < 2){
-		dispConfig.cImageWidth = image->width;
-		dispConfig.cImageHeight = image->height;
 		ret = omxRenderImage(pCurRender, image);
 		destroyImage(image);
 	}else{
-		dispConfig.cImageWidth = anim->curFrame->width;
-		dispConfig.cImageHeight = anim->curFrame->height;
 		ret = omxRenderAnimation(pCurRender, anim);
 	}
 	if(ret != 0){
 		fprintf(stderr, "render returned 0x%x\n", ret);
 	}
 	
-	if(stopRender && stopRender->component){
+	if(stopRender && stopRender->renderComponent){
 		ret = stopOmxImageRender(stopRender);
 		if(ret != 0)
 			fprintf(stderr, "render cleanup returned 0x%x\n", ret);
@@ -330,41 +315,6 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim){
 
 	if(info)
 		printf("Width: %u, Height: %u\n", image->width, image->height);
-
-	if(ret == 0 && anim->frameCount < 2){		
-		IMAGE image2;
-		image2.colorSpace = color;
-		if(center){
-			if((dispConfig.rotation == 90 || dispConfig.rotation == 270) &&
-				(image->width > sHeight|| image->height > sWidth)){
-					
-				image2.height = dispConfig.height;
-				image2.width = dispConfig.width;
-			}else if(image->height > sHeight || image->width > sWidth){
-				image2.height = dispConfig.height;
-				image2.width = dispConfig.width;
-			}else if(dispConfig.rotation == 90 || dispConfig.rotation == 270){
-				image2.height = image->width;
-				image2.width = image->height;
-			}else{
-				image2.height = image->height;
-				image2.width = image->width;
-			}
-		}else{
-			image2.height = dispConfig.height;
-			image2.width = dispConfig.width;
-		}
-			
-		ret = omxAutoResize(client, image, &image2, dispConfig.display, dispConfig.rotation, 
-				dispConfig.configFlags & OMX_DISP_CONFIG_FLAG_NO_ASPECT);
-		if(ret != OMX_IMAGE_OK){
-			printf("resize returned 0x%x\n", ret);
-		}else{
-			cpyImage(&image2, image);
-			if(info)
-				printf("Resized Width: %u, Height: %u\n", image->width, image->height);
-		}
-	}
 
 	return ret;
 }

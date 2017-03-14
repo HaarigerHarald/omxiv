@@ -70,13 +70,19 @@ struct OMX_RENDER_TRANSITION{
 	
 } OMX_RENDER_TRANSITION;
 
-#define INIT_OMX_RENDER {0, 0, 0, 0, {0}, 0, 0, 0, 0, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER}
+#define INIT_OMX_RENDER {0, 0, 0, 0, 0, 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER}
 
 typedef struct OMX_RENDER{
 	ILCLIENT_T *client;
-	COMPONENT_T *component;
-	OMX_HANDLETYPE handle;
-	int inPort;
+	
+	COMPONENT_T *renderComponent;
+	OMX_HANDLETYPE renderHandle;
+	int renderInPort;
+	
+	COMPONENT_T *resizeComponent;
+	OMX_HANDLETYPE resizeHandle;
+	int resizeInPort;
+	int resizeOutPort;
 	
 	struct OMX_RENDER_TRANSITION transition;
 	OMX_RENDER_DISP_CONF *dispConfig;
@@ -85,6 +91,7 @@ typedef struct OMX_RENDER{
 	
 	char renderAnimation;
 	volatile char stop;
+	volatile char pSettingsChanged;
 	pthread_t animRenderThread;
 	pthread_mutex_t lock;
 	pthread_cond_t cond;

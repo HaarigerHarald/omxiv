@@ -674,6 +674,7 @@ int softDecodeTIFF(FILE *fp, IMAGE* im){
 		unsigned int stride = ALIGN16(im->width)*4;
 		im->nData = stride*ALIGN16(im->height);
 		im->pData = malloc(im->nData);
+		im->colorSpace = COLOR_SPACE_RGBA;
 		if (im->pData != NULL){
 			if (TIFFReadRGBAImageOriented(tif, im->width, im->height,(uint32_t*) im->pData, 
 					/* ORIENTATION_TOPLEFT */ 1, 0)){
