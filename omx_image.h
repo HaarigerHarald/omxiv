@@ -52,10 +52,4 @@ int omxDecodeJpeg(ILCLIENT_T *client, FILE *jpegFile, IMAGE *jpeg);
  *  use rgba instead. */
 int omxResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage);
 
-/** Resizes inImage to outImage. Make sure to set width, 
- *  height and colorSpace of outImage before calling this. 
- *  Takes screen resolution and rotation into account. */
-int omxAutoResize(ILCLIENT_T *client, IMAGE *inImage, IMAGE *outImage, const int display, 
-			const int rotation, const char noAspect);
-
 #endif
