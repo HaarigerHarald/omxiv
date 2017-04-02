@@ -285,13 +285,6 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim){
 			if(info)
 				printf("Hard decode jpeg\n");
 			ret = omxDecodeJpeg(client, imageFile, image);
-			if(ret != 0){
-				rewind(imageFile);
-				destroyImage(image);
-				if(info)
-					printf("Error fallback to soft decodeing\n");
-				ret = softDecodeJpeg(imageFile, image);
-			}
 		}
 	}else if(memcmp(magNum, magNumPng, sizeof(magNumPng)) == 0){
 		ret = softDecodePng(imageFile, image);

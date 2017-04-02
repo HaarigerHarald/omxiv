@@ -36,8 +36,8 @@
 #include "bcm_host.h"
 
 #define TIMEOUT_MS 1500
-#define DECODER_BUFFER_NUM 2
-#define MAX_EMPTY_BUFFER_WAIT_MS 200
+#define DECODER_BUFFER_NUM 3
+#define MAX_EMPTY_BUFFER_WAIT_MS 50
 
 #define ALIGN2(x) (((x+1)>>1)<<1)
 
@@ -60,15 +60,10 @@ typedef struct JPEG_DECODER {
 
 static void emptyBufferDone(void *data, COMPONENT_T *comp){
 	JPEG_DECODER *decoder= (JPEG_DECODER*) data;
-	if(decoder->emptyBDone==0){
-		decoder->emptyBDone=1;
-	}else{
-		decoder->emptyBDone=1;
-		pthread_mutex_lock(&decoder->lock);
-		pthread_cond_signal(&decoder->cond);
-		pthread_mutex_unlock(&decoder->lock);
-	}
-	
+	decoder->emptyBDone--;
+	pthread_mutex_lock(&decoder->lock);
+	pthread_cond_signal(&decoder->cond);
+	pthread_mutex_unlock(&decoder->lock);
 }
 
 static int portSettingsChanged(JPEG_DECODER *decoder, IMAGE *jpeg){
@@ -192,7 +187,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	OMX_BUFFERHEADERTYPE *pBufHeader = decoder->ppInputBufferHeader[bufferIndex];
 	ilclient_set_empty_buffer_done_callback(decoder->client, emptyBufferDone, decoder);
 	
-	bufferIndex^=1;
+	bufferIndex=1;
 	
 	pBufHeader->nFilledLen = fread(pBufHeader->pBuffer, 1, pBufHeader->nAllocLen, sourceImage);
 	
@@ -205,18 +200,18 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		retVal|=OMX_IMAGE_ERROR_READING;
 		end=1;
 	}
-	
+	decoder->emptyBDone=0;
 	pthread_mutex_init(&decoder->lock, NULL);
 	pthread_cond_init(&decoder->cond, NULL);
 	
 	while(end == 0 && retVal == OMX_IMAGE_OK){
-		decoder->emptyBDone=0;
 		// We've got an eos event early this usually means that we are done decoding
 		if(ilclient_remove_event(decoder->component, OMX_EventBufferFlag, decoder->outPort, 
 				0, OMX_BUFFERFLAG_EOS, 0 )==0){
 				eos=1;
 				break;
-		}		
+		}	
+		decoder->emptyBDone++;
 		int ret = OMX_EmptyThisBuffer(decoder->handle, pBufHeader);
 		if (ret != OMX_ErrorNone) {
 			retVal|=OMX_IMAGE_ERROR_MEMORY;
@@ -227,7 +222,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 			
 			pBufHeader = decoder->ppInputBufferHeader[bufferIndex];
 			
-			bufferIndex^=1;
+			bufferIndex= (bufferIndex+1)% DECODER_BUFFER_NUM;
 		
 			pBufHeader->nFilledLen = fread(pBufHeader->pBuffer, 1, pBufHeader->nAllocLen, sourceImage);
 			
@@ -247,26 +242,28 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 		
 		if(pSettingsChanged == 0 && ilclient_remove_event(decoder->component,
 				OMX_EventPortSettingsChanged, decoder->outPort, 0, 0, 1 ) == 0){
-					pSettingsChanged=1;
-					retVal|=portSettingsChanged(decoder, jpeg);
+					
+				pSettingsChanged=1;
+				retVal|=portSettingsChanged(decoder, jpeg);
 		}
-		
-		if(!decoder->emptyBDone){
+		int n;
+		for(n=0; n<20 && decoder->emptyBDone !=0; n++){
 			clock_gettime(CLOCK_REALTIME, &wait);
 			wait.tv_nsec += MAX_EMPTY_BUFFER_WAIT_MS*1000000L;
 			wait.tv_sec += wait.tv_nsec/1000000000L;
 			wait.tv_nsec %= 1000000000L;
-			if(!decoder->emptyBDone){
-				decoder->emptyBDone=2;
+			if(decoder->emptyBDone != 0){
 				pthread_mutex_lock(&decoder->lock);
 				pthread_cond_timedwait(&decoder->cond, &decoder->lock, &wait);
 				pthread_mutex_unlock(&decoder->lock);
-			}
+				if(decoder->emptyBDone < DECODER_BUFFER_NUM-1)
+					break;
+			}else
+				break;	
 		}
 		
-		if(pSettingsChanged == 0 && ilclient_wait_for_event(decoder->component,
-				OMX_EventPortSettingsChanged,decoder->outPort, 0, 0, 1, 
-				ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, 10) == 0){	 
+		if(pSettingsChanged == 0 && ilclient_remove_event(decoder->component,
+				OMX_EventPortSettingsChanged,decoder->outPort, 0, 0, 1) == 0){	 
 			
 			pSettingsChanged=1;
 			retVal|=portSettingsChanged(decoder, jpeg);
@@ -274,7 +271,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 			
 			
 		if (bFilled == 0 && pSettingsChanged==1 && retVal == OMX_IMAGE_OK) {
-		
+			
 			ret = OMX_FillThisBuffer(decoder->handle, decoder->pOutputBufferHeader);
 			if (ret != OMX_ErrorNone) {
 				retVal|=OMX_IMAGE_ERROR_MEMORY;
@@ -285,14 +282,29 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 	}
 	ilclient_set_empty_buffer_done_callback(decoder->client, NULL, NULL);
 	
+	if(pSettingsChanged == 0 && ilclient_wait_for_event(decoder->component,
+				OMX_EventPortSettingsChanged,decoder->outPort, 0, 0, 1, 
+				ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, TIMEOUT_MS) == 0){	 
+		
+		pSettingsChanged=1;
+		retVal|=portSettingsChanged(decoder, jpeg);
+		if(retVal == OMX_IMAGE_OK){
+			int ret = OMX_FillThisBuffer(decoder->handle, decoder->pOutputBufferHeader);
+			if (ret != OMX_ErrorNone) 
+				retVal|=OMX_IMAGE_ERROR_MEMORY;
+			bFilled = 1;
+		}
+	}
+	
 	if( bFilled == 1 && !eos && ilclient_wait_for_event(decoder->component, OMX_EventBufferFlag, 
 				decoder->outPort, 0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, TIMEOUT_MS) != 0 ){
+
 		retVal|=OMX_IMAGE_ERROR_NO_EOS;
 	}
 	
 	pthread_mutex_destroy(&decoder->lock);
 	pthread_cond_destroy(&decoder->cond);
-		
+	
 	int i = 0;
 	for (i = 0; i < DECODER_BUFFER_NUM; i++) {
 		int ret = OMX_FreeBuffer(decoder->handle,decoder->inPort, decoder->ppInputBufferHeader[i]);
