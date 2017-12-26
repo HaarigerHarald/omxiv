@@ -319,7 +319,7 @@ int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size){
 		goto cleanup;
 	}
 	
-	char* bmpData = bmp.bitmap;
+	uint8_t* bmpData = bmp.bitmap;
 	int bmpWidth = bmp.width;
 	
 	bmpImage->height = bmp.height;

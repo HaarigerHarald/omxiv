@@ -28,6 +28,8 @@
 #ifndef IMAGEDEF_H
 #define IMAGEDEF_H
 
+#include <stdint.h>
+
 #define destroyImage(im) {free((im)->pData); (im)->pData = NULL;}
 
 /* Color spaces OMX-Components support */
@@ -37,7 +39,7 @@
 #define COLOR_SPACE_RGB16 3
 
 typedef struct IMAGE{
-	char *pData;	/* Image pixel data */
+	uint8_t* pData;	/* Image pixel data */
 	size_t nData;	/* Alloc data length */
 	
 	unsigned int width;
@@ -51,7 +53,7 @@ typedef struct ANIM_IMAGE{
 	unsigned int decodeCount;
 	unsigned int frameNum;
 	
-	unsigned char* imData;
+	uint8_t* imData;
 	size_t size;
 	
 	void* pExtraData;
