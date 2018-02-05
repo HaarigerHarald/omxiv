@@ -42,15 +42,16 @@ static const struct option longOpts[] = {
 	{"info", no_argument, 0, 'i'},
 	{"no-keys", no_argument, 0, 'k'},
 	{"soft", no_argument, 0, 's'},
+	{"ignore-exif", no_argument, 0, 0x103},
 	{0, 0, 0, 0}
 };
 
 static ILCLIENT_T *client=NULL;
 static char end = 0;
 
-static char info = 0, blank = 0, soft = 0, keys = 1, center = 0;
+static char info = 0, blank = 0, soft = 0, keys = 1, center = 0, exifOrient = 1, mirror = 0;
 static uint32_t sWidth, sHeight;
-static int initRotation = 0;
+static int initRotation = 0, rotateInc = 90;
 
 static OMX_RENDER render = INIT_OMX_RENDER, render2;
 static OMX_RENDER* pCurRender = &render;
@@ -159,7 +160,8 @@ void printUsage(const char *progr){
 	printf("    -d  --display       n        Display number\n");
 	printf("    -i  --info                   Print some additional infos\n");
 	printf("    -k  --no-keys                Disable keyboard input\n");
-	printf("    -s  --soft                   Force software decoding\n\n");
+	printf("    -s  --soft                   Force software decoding\n");
+	printf("        --ignore-exif            Ignore exif orientation\n\n");
 	printf("KEY CONFIGURATION:\n\n");
 	printf("    ESC, q  :   Quit\n");
 	printf("    LEFT    :   Previous image\n");
@@ -211,7 +213,43 @@ static int renderImage(IMAGE *image, ANIM_IMAGE *anim){
 		}
 	}
 	
-	dispConfig.rotation = initRotation;
+	dispConfig.rotation = 0;
+	switch(exifOrient){
+		case 7:
+			dispConfig.rotation += 90;
+		case 4:
+			dispConfig.rotation += 90;
+		case 5:
+			dispConfig.rotation += 90;
+		case 2:
+			dispConfig.rotation += (360 - initRotation);
+			if(mirror == 0){
+				rotateInc = 270;
+				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
+			}else{
+				rotateInc = 90;
+				dispConfig.configFlags &= ~OMX_DISP_CONFIG_FLAG_MIRROR;
+			}
+			break;
+		case 8: 
+			dispConfig.rotation += 90;
+		case 3: 
+			dispConfig.rotation += 90;
+		case 6:
+			dispConfig.rotation += 90;
+		case 1:
+		case 0:
+			dispConfig.rotation += initRotation;
+			if(mirror == 1){
+				rotateInc = 270;
+				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
+			}else{
+				rotateInc = 90;
+				dispConfig.configFlags &= ~OMX_DISP_CONFIG_FLAG_MIRROR;
+			}
+			break;
+	}
+	dispConfig.rotation%=360;
 	
 	if(anim->frameCount < 2){
 		ret = omxRenderImage(pCurRender, image);
@@ -237,6 +275,8 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim){
 	unsigned char *httpImMem = NULL;
 	size_t size = 0;
 	char magNum[8];
+	
+	exifOrient = (exifOrient == 0) ? 0 : 1;
 	
 	if(strncmp(filePath, "http://", 7) == 0 || strncmp(filePath, "https://", 8) == 0){
 		if(info)
@@ -274,6 +314,9 @@ static int decodeImage(const char *filePath, IMAGE *image, ANIM_IMAGE *anim){
 			free(httpImMem);
 			return ret;
 		}
+		
+		if(exifOrient != 0)
+			exifOrient = jInfo.orientation;
 		
 		rewind(imageFile);
 
@@ -420,8 +463,7 @@ int main(int argc, char *argv[]){
 				dispConfig.rotation = initRotation;
 				break;
 			case 'm':
-				dispConfig.configFlags |= OMX_DISP_CONFIG_FLAG_MIRROR;
-				break;
+				mirror = 1; break;
 			case 'l':
 				dispConfig.layer = strtol(optarg, NULL, 10);
 				break;
@@ -434,6 +476,8 @@ int main(int argc, char *argv[]){
 				keys = 0; break;
 			case 's':
 				soft = 1; break;
+			case 0x103:
+				exifOrient = 0; break;
 			default:
 				return EXIT_FAILURE;	
 		}
@@ -544,6 +588,7 @@ int main(int argc, char *argv[]){
 		}else if(c == 'm' || c =='M'){
 			tcflush(0, TCIFLUSH);
 			dispConfig.configFlags^= OMX_DISP_CONFIG_FLAG_MIRROR;
+			rotateInc = (rotateInc + 180)%360;
 			ret = setOmxDisplayConfig(pCurRender);
 			if(ret != 0){
 				fprintf(stderr, "dispConfig set returned 0x%x\n", ret);
@@ -556,18 +601,14 @@ int main(int argc, char *argv[]){
 			c = getch(1);
 			tcflush(0, TCIFLUSH);
 			if(c == 0x41){
-				if(dispConfig.rotation>0)
-					dispConfig.rotation-= 90;
-				else
-					dispConfig.rotation=270;
+				dispConfig.rotation = (dispConfig.rotation + 360 -rotateInc)%360;
 				ret = setOmxDisplayConfig(pCurRender);
 				if(ret != 0){
 					fprintf(stderr, "dispConfig set returned 0x%x\n", ret);
 					break;
 				}
 			}else if(c == 0x42){
-				dispConfig.rotation+= 90;
-				dispConfig.rotation%=360;
+				dispConfig.rotation = (dispConfig.rotation + rotateInc)%360;
 				ret = setOmxDisplayConfig(pCurRender);
 				if(ret != 0){
 					fprintf(stderr, "dispConfig set returned 0x%x\n", ret);

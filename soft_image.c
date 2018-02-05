@@ -42,6 +42,8 @@
 #define MIN_FRAME_DELAY_CS 2
 #define BUMP_UP_FRAME_DELAY_CS 10
 
+static const char magExif[] = {0x45, 0x78, 0x69, 0x66, 0x00, 0x00};
+
 struct my_error_mgr {
 	struct jpeg_error_mgr pub;
 	jmp_buf setjmp_buffer;
@@ -73,6 +75,7 @@ int readJpegHeader(FILE *infile, JPEG_INFO *jpegInfo){
 
 	jpeg_create_decompress(&cinfo);
 	jpeg_stdio_src(&cinfo, infile);
+	jpeg_save_markers(&cinfo, JPEG_APP0+1, 0xffff);
 	jpeg_read_header(&cinfo, TRUE);
 	
 	if(cinfo.progressive_mode)
@@ -81,6 +84,88 @@ int readJpegHeader(FILE *infile, JPEG_INFO *jpegInfo){
 		jpegInfo->mode = JPEG_MODE_NON_PROGRESSIVE;
 		
 	jpegInfo->nColorComponents = cinfo.num_components;
+	
+	
+	// read EXIF orientation
+	// losely base on: http://sylvana.net/jpegcrop/jpegexiforient.c
+	jpegInfo->orientation = 1; // Default
+	jpeg_saved_marker_ptr pMarker = cinfo.marker_list;
+	
+	if(pMarker != NULL && pMarker->data_length >= 20 && 
+		memcmp(pMarker->data, magExif, sizeof(magExif)) == 0) {
+			
+		unsigned int exifLen = pMarker->data_length;
+		uint8_t* exifData = pMarker->data;
+		short motorola;
+		
+		// byte order 
+		if(exifData[6] == 0x49 && exifData[7] == 0x49)
+			motorola = 0;
+		else if(exifData[6] == 0x4D && exifData[7] == 0x4D)
+			motorola = 1;
+		else
+			goto cleanExit;
+
+		if (motorola) {
+			if(exifData[8] != 0 || exifData[9] != 0x2A) 
+				goto cleanExit;
+		} else {
+			if(exifData[9] != 0 || exifData[8] != 0x2A) 
+				goto cleanExit;
+		}
+		
+		unsigned int offset;
+		// read offset to IFD0
+		if(motorola) {
+			if (exifData[10] != 0 || exifData[11] != 0)
+				goto cleanExit;
+			offset = (exifData[12]<<8) + exifData[13] + 6;
+		} else {
+			if (exifData[12] != 0 || exifData[13] != 0)
+				goto cleanExit;
+			offset = (exifData[11]<<8) + exifData[10] + 6;
+		}
+		if(offset > exifLen - 14)
+			goto cleanExit;
+		
+		unsigned int nTags;
+		
+		// read number of tags in IFD0
+		if(motorola)
+			nTags = (exifData[offset]<<8) + exifData[offset+1];
+		else 
+			nTags = (exifData[offset+1]<<8) + exifData[offset];
+
+		offset += 2;
+
+		while(1) {
+			if (nTags-- == 0 || offset > exifLen - 12)
+				goto cleanExit;
+			
+			unsigned int tag;
+			if (motorola)
+				tag = (exifData[offset]<<8) + exifData[offset+1];
+			else 
+				tag = (exifData[offset+1]<<8) + exifData[offset];
+				
+			if (tag == 0x0112) break; // orientation tag found
+			
+			offset += 12;
+		}
+		
+		unsigned char orientation = 9;
+		
+		if (motorola && exifData[offset+8] == 0) {
+			orientation = exifData[offset+9];
+		} else if(exifData[offset+9] == 0) {
+			orientation = exifData[offset+8];
+		}
+		
+		if (orientation <= 8 && orientation != 0)
+			jpegInfo->orientation = orientation;
+	}
+	
+cleanExit:	
 	
 	jpeg_destroy_decompress(&cinfo);
 	

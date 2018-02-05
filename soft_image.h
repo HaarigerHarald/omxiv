@@ -45,8 +45,9 @@ void destroyAnimIm(ANIM_IMAGE *animIm);
 #define JPEG_MODE_NON_PROGRESSIVE 1
 
 typedef struct JPEG_INFO {
-	int nColorComponents;
-	int mode;
+	int nColorComponents; // number of color components 
+	int mode; // progressive or non progressive 
+	char orientation; // orientation according to exif tag (1..8, default: 1)
 } JPEG_INFO;
 
 int readJpegHeader(FILE *jpegFile, JPEG_INFO *jpegInfo);
