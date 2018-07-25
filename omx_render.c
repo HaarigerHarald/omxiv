@@ -147,7 +147,7 @@ static int resizePortSettingsChanged(OMX_RENDER *render, unsigned int width, uns
 	
 	portdef.format.image.eCompressionFormat = OMX_IMAGE_CodingUnused;
 	portdef.format.image.bFlagErrorConcealment = OMX_FALSE;
-	portdef.format.image.eColorFormat = OMX_COLOR_Format32bitABGR8888;
+	portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar; //OMX_COLOR_Format32bitABGR8888 (does not blend)
 	
 	portdef.format.image.nFrameWidth = width;
 	portdef.format.image.nFrameHeight = height;
@@ -167,7 +167,7 @@ static int resizePortSettingsChanged(OMX_RENDER *render, unsigned int width, uns
 	
 	portdef.format.image.eCompressionFormat = OMX_IMAGE_CodingUnused;
 	portdef.format.image.bFlagErrorConcealment = OMX_FALSE;
-	portdef.format.image.eColorFormat = OMX_COLOR_Format32bitABGR8888;
+	portdef.format.image.eColorFormat = OMX_COLOR_FormatYUV420PackedPlanar; //OMX_COLOR_Format32bitABGR8888 (does not blend)
 	
 	portdef.format.image.nFrameWidth = width;
 	portdef.format.image.nFrameHeight = height;
