@@ -216,10 +216,7 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 			break;
 		}
 		
-		int s;
-		while ((s = sem_trywait(&decoder->semaphore)) == -1 && errno == EINTR)
-				continue;
-			
+		int s = sem_trywait(&decoder->semaphore);
 		if (s == -1 && pSettingsChanged == 0) {
 		
 			if (ilclient_wait_for_event(decoder->component,OMX_EventPortSettingsChanged,decoder->outPort,
@@ -238,10 +235,10 @@ static int decodeJpeg(JPEG_DECODER * decoder, FILE *sourceImage, IMAGE *jpeg){
 			}
 		}
 
-		if (s == -1) {
-			
-			while ((s = sem_wait(&decoder->semaphore)) == -1 && errno == EINTR)
-				continue;
+		if (s == -1 && sem_wait(&decoder->semaphore) == -1 && errno == EINTR) {
+				
+			retVal |= OMX_IMAGE_ERROR_EXECUTING;
+			break;
 		}
 		
 		if(!feof(sourceImage)){
