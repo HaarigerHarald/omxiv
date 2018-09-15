@@ -92,14 +92,10 @@ static unsigned long getCurrentTimeMs(){
 
 static int imageFilter(const struct dirent *entry){
 	char* ext = strrchr(entry->d_name, '.');
-	if(ext!=NULL && (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".JPG") == 0 ||
-			strcmp(ext, ".jpeg") == 0 || strcmp(ext, ".JPEG") == 0 ||
-			strcmp(ext, ".jpe") == 0 || strcmp(ext, ".JPE") == 0 ||
-			strcmp(ext, ".png") == 0 || strcmp(ext, ".PNG") == 0 ||
-			strcmp(ext, ".bmp") == 0 || strcmp(ext, ".BMP") == 0 ||
-			strcmp(ext, ".gif") == 0 || strcmp(ext, ".GIF") == 0 ||
-			strcmp(ext, ".tif") == 0 || strcmp(ext, ".TIF") == 0 ||
-			strcmp(ext, ".tiff") == 0 || strcmp(ext, ".TIFF") == 0))
+	if(ext!=NULL && (strcasecmp(ext, ".jpg") == 0 || strcasecmp(ext, ".jpeg") == 0 
+			|| strcasecmp(ext, ".jpe") == 0 || strcasecmp(ext, ".png") == 0
+			|| strcasecmp(ext, ".bmp") == 0 || strcasecmp(ext, ".gif") == 0 
+			|| strcasecmp(ext, ".tif") == 0 || strcasecmp(ext, ".tiff") == 0))
 		return 1;
 	else
 		return 0;
