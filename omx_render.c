@@ -306,6 +306,7 @@ int setOmxDisplayConfig(OMX_RENDER *render){
 	if(dispConf->alpha != 0){
 		set|=OMX_DISPLAY_SET_ALPHA;
 		dispConfRT.alpha=dispConf->alpha;
+		dispConfRT.alpha|=OMX_DISPLAY_ALPHA_FLAGS_MIX;
 	}
 	
 	if(dispConf->layer != 0){
