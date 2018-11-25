@@ -9,8 +9,16 @@ CFLAGS+=-DVERSION=${BUILDVERSION} -DLCURL_NAME=$(LIBCURL_NAME)
 
 include Makefile.include
 
-$(BIN): $(OBJS)
+$(BIN): help.h $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LDFLAGS)
+	
+clean:: 
+	@rm -f help.h
+	
+help.h: README.md
+	echo -n "static void printUsage(){printf(\"" > help.h
+	sed -n -e '/\#\# Synopsis/,/\#\# / p' README.md | sed -e '1d;$$d' | sed ':a;N;$$!ba;s/\n/\\n/g' | tr '\n' ' ' >> help.h
+	echo "\\\\n\");}" >> help.h
 
 ilclient:
 	mkdir -p libs

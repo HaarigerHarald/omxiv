@@ -43,3 +43,6 @@
 
 # ilclient
 /libs
+
+# generated header
+help.h
