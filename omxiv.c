@@ -44,13 +44,14 @@ static const struct option longOpts[] = {
 	{"no-keys", no_argument, 0, 'k'},
 	{"soft", no_argument, 0, 's'},
 	{"ignore-exif", no_argument, 0, 0x103},
+	{"random", no_argument, 0, 'r'},
 	{0, 0, 0, 0}
 };
 
 static ILCLIENT_T *client=NULL;
 static char end = 0;
 
-static char info = 0, blank = 0, soft = 0, keys = 1, center = 0, exifOrient = 1, mirror = 0;
+static char info = 0, blank = 0, soft = 0, keys = 1, center = 0, exifOrient = 1, mirror = 0, randomize = 0;
 static uint32_t sWidth, sHeight;
 static int initRotation = 0, rotateInc = 90;
 
@@ -377,7 +378,7 @@ int main(int argc, char *argv[]){
 		keys=0;
 	
 	int opt;
-	while((opt = getopt_long(argc, argv, "hvt:bT:a:o:ml:d:iks", 
+	while((opt = getopt_long(argc, argv, "hvt:bT:a:o:ml:d:ikrs",
 			longOpts, NULL)) != -1){
 		
 		switch(opt){
@@ -425,6 +426,8 @@ int main(int argc, char *argv[]){
 				break;
 			case 'm':
 				mirror = 1; break;
+			case 'r':
+				randomize = 1; break;
 			case 'l':
 				dispConfig.layer = strtol(optarg, NULL, 10);
 				break;
@@ -457,6 +460,21 @@ int main(int argc, char *argv[]){
 		int x;
 		for(x =0; optind+x<argc; x++){
 			files[x]=argv[optind+x];
+		}
+	}
+
+	if(randomize && imageNum>1){
+		long int random_number;
+		int x, y;
+		char *temp;
+		srand(time(NULL));
+		for(x =0; x<imageNum; x++){
+			do random_number = random(); while(!random_number);
+			y = ( (random_number > imageNum) ? (random_number%imageNum) :
+			    (imageNum%random_number));
+			temp = files[y];
+			files[y] = files[x];
+			files[x] = temp;
 		}
 	}
 
