@@ -64,7 +64,7 @@ typedef struct OMX_RENDER_DISP_CONF{
 	
 } OMX_RENDER_DISP_CONF;
 
-struct OMX_RENDER_TRANSITION{
+typedef struct OMX_RENDER_TRANSITION{
 	enum transition_t{NONE, BLEND} type;
 	int durationMs;
 	
