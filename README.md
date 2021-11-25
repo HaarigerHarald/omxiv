@@ -1,6 +1,8 @@
 # OMX image viewer
 
-A GPU accelerated image viewer for the Raspberry Pi. 
+A GPU accelerated image viewer for the Raspberry Pi.
+
+Due to deprecation of the OpenMax API and the unavailability of those libraries on arm64, this project only supports 32bit operating systems.
 
 ## Building
 
