@@ -2,7 +2,7 @@
 
 A GPU accelerated image viewer for the Raspberry Pi.
 
-Due to deprecation of the OpenMax API and the unavailability of those libraries on arm64, this project only supports 32bit operating systems.
+**This project is deprecated due to the deprecation of the OpenMax API and the unavailability of those libraries for arm64. It should continue to be functional on 32 bit operating systems however.**
 
 ## Building
 
