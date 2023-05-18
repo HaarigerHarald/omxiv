@@ -1,0 +1,10 @@
+BasedOnStyle: LLVM
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+BreakBeforeBraces: Allman
+ColumnLimit: 0
+AccessModifierOffset: -4
+PointerAlignment: Left
+IndentCaseLabels: true
+AllowShortIfStatementsOnASingleLine: true

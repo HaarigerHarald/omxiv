@@ -12,7 +12,7 @@
  *    * Neither the name of the copyright holder nor the
  *      names of its contributors may be used to endorse or promote products
  *      derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,7 +30,7 @@
 
 #include "image_def.h"
 
-void destroyAnimIm(ANIM_IMAGE *animIm);
+void destroyAnimIm(ANIM_IMAGE* animIm);
 
 #define SOFT_IMAGE_OK 0x0
 #define SOFT_IMAGE_ERROR_MEMORY 0x1
@@ -44,27 +44,27 @@ void destroyAnimIm(ANIM_IMAGE *animIm);
 #define JPEG_MODE_PROGRESSIVE 0
 #define JPEG_MODE_NON_PROGRESSIVE 1
 
-typedef struct JPEG_INFO {
-	int nColorComponents; // number of color components 
-	int mode; // progressive or non progressive 
-	char orientation; // orientation according to exif tag (1..8, default: 1)
+typedef struct JPEG_INFO
+{
+    int nColorComponents; // number of color components
+    int mode;             // progressive or non progressive
+    char orientation;     // orientation according to exif tag (1..8, default: 1)
 } JPEG_INFO;
 
-int readJpegHeader(FILE *jpegFile, JPEG_INFO *jpegInfo);
-int softDecodeJpeg(FILE *jpegFile, IMAGE *jpeg);
+int readJpegHeader(FILE* jpegFile, JPEG_INFO* jpegInfo);
+int softDecodeJpeg(FILE* jpegFile, IMAGE* jpeg);
 
-int softDecodePng(FILE *pngFile, IMAGE* png);
+int softDecodePng(FILE* pngFile, IMAGE* png);
 
-int softDecodeTIFF(FILE *fp, IMAGE* im);
+int softDecodeTIFF(FILE* fp, IMAGE* im);
 void unloadLibTiff();
 
-int softDecodeBMP(FILE *fp, IMAGE* bmpImage, unsigned char** data, size_t size);
+int softDecodeBMP(FILE* fp, IMAGE* bmpImage, unsigned char** data, size_t size);
 
-int softDecodeGif(FILE *fp, ANIM_IMAGE *gifImage, unsigned char** data, size_t size);
-
+int softDecodeGif(FILE* fp, ANIM_IMAGE* gifImage, unsigned char** data, size_t size);
 
 /* Get Image from Url */
-unsigned char* getImageFromUrl(const char *url, size_t *size);
+unsigned char* getImageFromUrl(const char* url, size_t* size);
 void unloadLibCurl();
 
 #endif

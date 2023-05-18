@@ -12,7 +12,7 @@
  *    * Neither the name of the copyright holder nor the
  *      names of its contributors may be used to endorse or promote products
  *      derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
  * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -30,7 +30,11 @@
 
 #include <stdint.h>
 
-#define destroyImage(im) {free((im)->pData); (im)->pData = NULL;}
+#define destroyImage(im)    \
+    {                       \
+        free((im)->pData);  \
+        (im)->pData = NULL; \
+    }
 
 /* Color spaces OMX-Components support */
 #define COLOR_SPACE_RGB24 0
@@ -38,31 +42,33 @@
 #define COLOR_SPACE_YUV420P 2
 #define COLOR_SPACE_RGB16 3
 
-typedef struct IMAGE{
-	uint8_t* pData;	/* Image pixel data */
-	size_t nData;	/* Alloc data length */
-	
-	unsigned int width;
-	unsigned int height;
-	unsigned char colorSpace; 
+typedef struct IMAGE
+{
+    uint8_t* pData; /* Image pixel data */
+    size_t nData;   /* Alloc data length */
+
+    unsigned int width;
+    unsigned int height;
+    unsigned char colorSpace;
 } IMAGE;
 
-typedef struct ANIM_IMAGE{
-	IMAGE *curFrame;
-	IMAGE *frames;
-	unsigned int decodeCount;
-	unsigned int frameNum;
-	
-	uint8_t* imData;
-	size_t size;
-	
-	void* pExtraData;
-	int (*decodeNextFrame)(struct ANIM_IMAGE *);
-	void (*finaliseDecoding)(struct ANIM_IMAGE *);
-	
-	unsigned int frameCount;
-	unsigned int frameDelayCs;
-	int loopCount;
+typedef struct ANIM_IMAGE
+{
+    IMAGE* curFrame;
+    IMAGE* frames;
+    unsigned int decodeCount;
+    unsigned int frameNum;
+
+    uint8_t* imData;
+    size_t size;
+
+    void* pExtraData;
+    int (*decodeNextFrame)(struct ANIM_IMAGE*);
+    void (*finaliseDecoding)(struct ANIM_IMAGE*);
+
+    unsigned int frameCount;
+    unsigned int frameDelayCs;
+    int loopCount;
 
 } ANIM_IMAGE;
 
